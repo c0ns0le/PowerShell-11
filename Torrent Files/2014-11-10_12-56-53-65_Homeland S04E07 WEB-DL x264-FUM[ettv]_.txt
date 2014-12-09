@@ -1,9 +1,0 @@
-Directory: C:\Users\Steve\Downloads\Torrents\Completed\Homeland S04E07 WEB-DL x264-FUM[ettv]
-Title: 
-State: 20
-Previous State: 20
-Kind: multi
-File: 
-Status: Connecting to peers
-
-Deleted once imported
