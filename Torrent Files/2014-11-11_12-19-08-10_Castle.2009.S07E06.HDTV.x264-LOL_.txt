@@ -1,0 +1,9 @@
+Directory: C:\Users\Steve\Downloads\Torrents\Completed\[ www.torrenting.com ] - Castle.2009.S07E06.HDTV.x264-LOL
+Title: 
+State: 20
+Previous State: 20
+Kind: multi
+File: 
+Status: Connecting to peers
+
+Deleted once imported

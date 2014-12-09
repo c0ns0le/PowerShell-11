@@ -1,0 +1,1 @@
+$env:PSModulePath += ";D:\Dropbox\Applications\WindowsPowerShell\Modules\"

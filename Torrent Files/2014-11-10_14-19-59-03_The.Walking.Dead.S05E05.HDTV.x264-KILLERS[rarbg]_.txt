@@ -1,0 +1,9 @@
+Directory: C:\Users\Steve\Downloads\Torrents\Completed\The.Walking.Dead.S05E05.HDTV.x264-KILLERS[rarbg]
+Title: 
+State: 20
+Previous State: 20
+Kind: multi
+File: 
+Status: Connecting to peers
+
+Deleted once imported
