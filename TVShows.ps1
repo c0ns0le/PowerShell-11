@@ -19,6 +19,19 @@ function refreshPlex() {
   # Start-Process -FilePath $plex -ArgumentList $plexParams -Wait -NoNewWindow
 }
 
+# Encode with ffmpeg
+function EncodeWithFFMPEG($inputStr,$outputStr) {
+  $ffmpeg = 'D:\Dropbox\Applications\Open Source\Video Apps\ffmpeg\bin\ffmpeg.exe'
+  $params = '-i',$inputStr,$outputStr
+  try {
+    Write-Host "Encoding $inputStr to $outputStr..."
+    [Diagnostics.Process]::Start($ffmpeg, $params).WaitForExit()
+  } catch {
+    return $false
+  }
+  return $true
+}
+
 # Encode the specified file with HandBrake for AppleTV.
 function EncodeWithHB($inputStr,$outputStr){
 
@@ -66,7 +79,7 @@ function GetSeriesId($showName) {
   try {
     Write-Host "Getting series id from theTVDb.com using series name for $showName."
     $url=$tvdburl+"api/GetSeries.php?seriesname="+$showName+"&language=English"
-    [xml]$series_ws = (New-Object System.Net.WebClient).DownloadString($url)
+    [xml]$series_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
     if ($series_ws) {
       $showName = ($showName+"*").Replace(' ','*')
       # Get series id based on name.
@@ -91,7 +104,7 @@ function GetBannerImage($seriesId, $parentDir, $season) {
   if (!(Test-Path $imgFile)) {
     # Get the highest rated season banner image.
     $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/banners.xml"
-    [xml]$banners_ws = (New-Object System.Net.WebClient).DownloadString($url)
+    [xml]$banners_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
     if ($banners_ws) {
       $bannerData = $banners_ws.Banners.Banner
       [int]$rating = 0
@@ -169,6 +182,7 @@ function DownloadFile($url, $targetFile = 'c:\temp\xml.xml') {
 $destDrive = 'D:\'
 $dropBox = "D:\Dropbox"
 $atomicParsley = $dropBox+'\Applications\Open Source\Video Apps\AtomicParsley\AtomicParsley.exe'
+$enc = [system.Text.Encoding]::UTF8
 $endBracket = $null
 $exitScript = $false
 $folderRename = $null
@@ -191,6 +205,8 @@ $script:waitFolder = $uTorrentHome+"Untagged\"
 $uTorrentPW = $env:UTORRENT_PW
 $uTorrentUser = $env:UTORRENT_USER
 $uTorrentWebUI = 'http://localhost:8080/gui'
+$wc = New-Object System.Net.WebClient
+$wc.Encoding = [System.Text.Encoding]::UTF8
 
 if (([environment]::OSVersion.Version.Major -eq 6) -and ([environment]::OSVersion.Version.Minor -ge 2)) {
   $videoWidthVar = 301 
@@ -339,6 +355,12 @@ foreach ($dir in $directories) {
               $episode = $details[2].TrimStart()
               $episode2 = $details[3].TrimStart()              
               break
+            } elseif ($item.ToUpper() -Match 'S(\d{1,2})E(\d{1,2})-E(\d{1,2})') {
+              $details = $item.Split('sSeE-eE')
+              $season = $details[1].TrimStart()
+              $episode = $details[2].TrimStart()
+              $episode2 = $details[3].TrimStart()              
+              break
             } elseif ($item.ToUpper() -Match 'S(\d{1,1})E(\d{1,2})') {
               $details = $item.Split('sSeE')
               $season = $details[1].TrimStart()
@@ -390,7 +412,7 @@ foreach ($dir in $directories) {
             break
           }
           # Convert Series Name to Title Case
-          $seriesName = (Get-Culture).TextInfo.ToTitleCase($seriesName.ToLower()).Trim()
+          $seriesName = (Get-Culture).TextInfo.ToTitleCase($seriesName.ToLower()).Trim().Replace('_',' ')
           Write-Host "Series Name (Title Case): $seriesName"
           # A few specific replace Strings for specific problem shows.
           if ($seriesName -like 'Overhaulin*') {
@@ -409,23 +431,23 @@ foreach ($dir in $directories) {
             $seriesName = 'Louie (2010)'
           }          
           $seriesName = $seriesName.Replace("S H I E L D","S.H.I.E.L.D.")
-  
-          Write-Host "Series Name (Corrected): $seriesName"
 
           # Tag, rename & move file to correct folder location.
           Write-Host "Parent directory: $untagged"
           if($seriesName) {
             $return = GetSeriesId $SeriesName
             $seriesId = $return[0]
-            $seriesName = $return[1]
+            #$seriesName = $return[1].Replace(": The Series","")
             Write-Host "Series ID: $seriesId"
             if ($seriesId) {
               try {
                 # Get the base series record.
                 $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/en.xml"
-                [xml]$baseseries_ws = (New-Object System.Net.WebClient).DownloadString($url)
+                [xml]$baseseries_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
                 if ($baseseries_ws) {
                   $baseSeriesData = $baseseries_ws.Data.Series
+                  $seriesName = $baseSeriesData.SeriesName
+                  Write-Host "Series Name (Corrected): $seriesName"
                   $actors = $baseSeriesData.Actors
                   Write-Host "Actors: $actors"
                   $contentRating = $baseSeriesData.ContentRating
@@ -457,7 +479,7 @@ foreach ($dir in $directories) {
               try {
                 Write-Host "Downloading episode data from theTVDb.com"
                 $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episodeId+"/en.xml"
-                [xml]$episode_ws = (New-Object System.Net.WebClient).DownloadString($url)
+                [xml]$episode_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
                 if ($episode_ws) {
                   $episodeData = $episode_ws.Data.Episode
                   $episodeName = $episodeData.EpisodeName
@@ -470,7 +492,7 @@ foreach ($dir in $directories) {
                 if ($episode2Id) {
                   Write-Host "Downloading episode 2 data from theTVDb.com"
                   $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episode2Id+"/en.xml"
-                  [xml]$episode2_ws = (New-Object System.Net.WebClient).DownloadString($url)
+                  [xml]$episode2_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
                   if ($episode2_ws) {
                     $episode2Data = $episode2_ws.Data.Episode
                     $episode2Name = $episode2Data.EpisodeName
@@ -496,9 +518,9 @@ foreach ($dir in $directories) {
             $destination = 'D:\TV Shows\'+$seriesName+"\Season "+$season+"\"
             
             # Clean unprintable characters and set fileformat.
-            $episodeName = $episodeName.Replace(':','').Replace('?','').Replace('/','-').Replace('\','-').Trim()
+            $episodeName = $episodeName.Replace(':','_').Replace('?','').Replace('/','-').Replace('\','-').Replace(',','-').Trim()
             if ($episode2Name) { 
-              $episode2Name = $episode2Name.Replace(':','').Replace('?','').Replace('/','-').Replace('\','-').Trim()
+              $episode2Name = $episode2Name.Replace(':','_').Replace('?','').Replace('/','-').Replace('\','-').Replace(',','-').Trim()
             } # end if $episode2Name.
             if ($episode2Id) {      
               $fileFormat = $seriesName+" - S"+$season+"E"+$episode+"-E"+$episode2+" - "+$episodeName+" & "+$episode2Name+".mp4"    
@@ -538,7 +560,10 @@ foreach ($dir in $directories) {
               $newFile.Replace('.mp4','(2).mp4')
             } # end if $newFile -equal to $fullFilePath
             EncodeWithHB $fullFilePath $newFile
-            Remove-Item $fullFilePath -Force -Verbose
+            if (Test-Path $newFile) {
+              Remove-Item $fullFilePath -Force -Verbose
+              mv $newFile $fullFilePath -Force -Verbose
+            }
             return
           }
           Start-Sleep -Seconds 5
@@ -553,10 +578,12 @@ foreach ($dir in $directories) {
             $imgFile = $destination+'folder.jpg'
             if (!(Test-Path $imgFile )) {
               $image = GetBannerImage $seriesId $dir $season 
-              mv $image $imgFile
-              # Set folder.jpg to hidden.
-              $file = get-item $imgFile -Force
-              $file.Attributes = 'Hidden'
+              if (Test-Path $image) {
+                mv $image $imgFile
+                # Set folder.jpg to hidden.
+                $file = get-item $imgFile -Force
+                $file.Attributes = 'Hidden'
+              }              
             } 
           }
           

@@ -47,7 +47,7 @@ foreach ($show in $watchedShows) {
 }
 
 foreach ($delete in $pendingDeletes) {
-  rm $delete   
+  rm $delete -Force 
 }
 
 If ($pendingDeletes) {
@@ -60,4 +60,4 @@ If ($pendingDeletes) {
 sl $tvShowsDir
 Get-ChildItem -recurse | Where {$_.PSIsContainer -and `
 @(Get-ChildItem -Lit $_.Fullname -r | Where {!$_.PSIsContainer}).Length -eq 0} |
-Remove-Item -recurse
+Remove-Item -recurse -Force
