@@ -76,7 +76,7 @@ $photos = $syncPhotos.Count
 foreach ($photo in $syncPhotos) {
   $counter++
   Write-Progress -activity "Reading photos..." -status "$counter of $photos" -percentComplete (($counter / $photos) * 100)
-  sl $PlexSync
+  sl $photoSync
   $year = [string](($photo.LastWriteTime).Year)
   $month = "{0:D2}" -f (($photo.LastWriteTime).Month)
   $day = "{0:D2}" -f (($photo.LastWriteTime).Day)

@@ -79,7 +79,7 @@ function GetSeriesId($showName) {
   try {
     Write-Host "Getting series id from theTVDb.com using series name for $showName."
     $url=$tvdburl+"api/GetSeries.php?seriesname="+$showName+"&language=English"
-    [xml]$series_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
+    [xml]$series_ws = $wc.DownloadString("$url")
     if ($series_ws) {
       $showName = ($showName+"*").Replace(' ','*')
       # Get series id based on name.
@@ -104,7 +104,7 @@ function GetBannerImage($seriesId, $parentDir, $season) {
   if (!(Test-Path $imgFile)) {
     # Get the highest rated season banner image.
     $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/banners.xml"
-    [xml]$banners_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
+    [xml]$banners_ws = $wc.DownloadString("$url")
     if ($banners_ws) {
       $bannerData = $banners_ws.Banners.Banner
       [int]$rating = 0
@@ -280,6 +280,15 @@ foreach ($torrent in $torrents) {
             $newMp4Path = $unpacked+$f.Path
             if (Test-Path -LiteralPath $torrentPath) {
               Copy-Item -LiteralPath $torrentPath $newMp4Path -Force -Verbose
+              if (Test-Path -LiteralPath $newMp4Path) {
+                $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
+                if (Test-Path -LiteralPath $torrentDirectory) {
+                  if($torrentDirectory -ne $completed) {
+                    Write-Host "Deleting $torrentDirectory"
+                    del -Recurse $torrentDirectory -Force
+                  } # End of if not completed folder.
+                } # End of torrent directory still exists.
+              }
             } # End of if TorrentPath exists.
 #          } elseif(($f.Path).Endswith('.avi')) {
 #            $torrentPath = $torrentDirectory+$f.Path
@@ -293,13 +302,7 @@ foreach ($torrent in $torrents) {
     } else {
       break      
     } # End of if else label is TV.
-    $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
-    if (Test-Path -LiteralPath $torrentDirectory) {
-      if($torrentDirectory -ne $completed) {
-        Write-Host "Deleting $torrentDirectory"
-        del -Recurse $torrentDirectory -Force
-      } # End of if not completed folder.
-    } # End of torrent directory still exists.
+    # If copy succesful, remove torrent.   
   } # End of if Completed.
 } # End of foreach Torrent.
   
@@ -339,58 +342,74 @@ foreach ($dir in $directories) {
       do {
         try {            
           # Loop through filename array and pull out the series name.
-          $seriesName = $null
-          $season = $null
-          $episode = $null
-          $episode2 = $null
+          [string]$seriesName = $null
+          [string]$season = $null
+          [string]$episode = $null
+          [string]$episode2 = $null
           $date = (Get-Date).ToUniversalTime().AddHours(-4).ToString("yyyy-MM-dd")
           Write-Host "Date: $date"
           $titleArray = (Split-Path $newFile -Leaf -Resolve).Split('.-_ ')
           Write-Host "Reading season and episode numbers"
           foreach ($item in $titleArray) {
             $item = $item.Trim()
+            # S##E##E##
             if ($item.ToUpper() -Match 'S(\d{1,2})E(\d{1,2})E(\d{1,2})') {
               $details = $item.Split('sSeEeE')
               $season = $details[1].TrimStart()
               $episode = $details[2].TrimStart()
               $episode2 = $details[3].TrimStart()              
               break
+            # S##E##-E##
             } elseif ($item.ToUpper() -Match 'S(\d{1,2})E(\d{1,2})-E(\d{1,2})') {
               $details = $item.Split('sSeE-eE')
               $season = $details[1].TrimStart()
               $episode = $details[2].TrimStart()
               $episode2 = $details[3].TrimStart()              
               break
+            # S####E##
+            } elseif ($item.ToUpper() -Match 'S(\d{1,4})E(\d{1,2})') {
+              $details = $item.Split('sSeE')
+              $season = $details[1].TrimStart()
+              $episode = $details[2].TrimStart()           
+              break
+            # S#E##
             } elseif ($item.ToUpper() -Match 'S(\d{1,1})E(\d{1,2})') {
               $details = $item.Split('sSeE')
               $season = $details[1].TrimStart()
               $episode = $details[2].TrimStart()
               break
+            # S##E##
             } elseif ($item.ToUpper() -Match 'S(\d{1,2})E(\d{1,2})') {
               $details = $item.Split('sSeE')
               $season = $details[1].TrimStart()
               $episode = $details[2].TrimStart()
               break
+            # S##
             } elseif ($item.ToUpper() -Match 'S(\d{1,2})') {
               $details = $item.Split('sS')
               $season = $details[1].TrimStart()
               break
+            # ##X##
             } elseif ($item.ToUpper() -Match '(\d{1,2})X(\d{1,2})') {
               $details = $item.Split('xX')
               $season = $details[0].TrimStart()
               $episode = $details[1].TrimStart()
               break
+            # 20## (year)
             } elseif ($item -Match '(^(19|20)\d{2}$)') {
               # Add brackets around years in series name.
               $seriesName = $seriesName+" "+"("+$item+")"
+            # ###
             } elseif ($item -Match '(^\d{1,3}$)') {
               $season = '0'+$item.Substring(0,1)
               $episode = $item.Substring(1,2)
               break
+            # ####
             } elseif ($item -Match '(^\d{1,4}$)') {
               $season = $item.Substring(0,2)
               $episode = $item.Substring(2,2)
               break
+            # ########
             } elseif ($item.ToUpper() -Match '(^\d{8}$)') {
               $date = $item.Substring(0,4)+'-'+$item.Substring(4,2)+'-'+$item.Substring(6,2)
   		        break
@@ -443,7 +462,7 @@ foreach ($dir in $directories) {
               try {
                 # Get the base series record.
                 $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/en.xml"
-                [xml]$baseseries_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
+                [xml]$baseseries_ws = $wc.DownloadString("$url")
                 if ($baseseries_ws) {
                   $baseSeriesData = $baseseries_ws.Data.Series
                   $seriesName = $baseSeriesData.SeriesName
@@ -471,7 +490,7 @@ foreach ($dir in $directories) {
           
           if($seriesId) {
             if ($season -and $episode) {
-              $seasonId = [int]$season
+              [int]$seasonId = $season
               $episodeId = [int]$episode
               if ($episode2) {
                 $episode2Id = [int]$episode2
@@ -479,7 +498,7 @@ foreach ($dir in $directories) {
               try {
                 Write-Host "Downloading episode data from theTVDb.com"
                 $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episodeId+"/en.xml"
-                [xml]$episode_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
+                [xml]$episode_ws = $wc.DownloadString("$url")
                 if ($episode_ws) {
                   $episodeData = $episode_ws.Data.Episode
                   $episodeName = $episodeData.EpisodeName
@@ -507,10 +526,10 @@ foreach ($dir in $directories) {
             } # End of if/else $season and $episode.
             
             # Add leading zeros to season and episode numbers.
-            $season = "{0:D2}" -f ($season)
-            $episode = "{0:D2}" -f ($episode)
+            $season = $season.PadLeft(2,"0")            
+            $episode = $episode.PadLeft(2,"0")
             if ($episode2) {
-              $episode2 = "{0:D2}" -f ($episode2)
+              $episode2 = $episode2.PadLeft(2,"0")
             } # end if $episode exists and is less than 10, and shorter than 2 characters.
             
             # Set destination folder based on the show name and season.
@@ -531,7 +550,7 @@ foreach ($dir in $directories) {
             try {
               # Rename the file
               Write-Host "Renaming $file to $fileFormat"
-              Rename-Item -Path $file $fileFormat -Force -Verbose
+              Rename-Item -Path $newFile $fileFormat -Force -Verbose
             } catch {
               Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName 
             } # end try catch.
@@ -539,7 +558,7 @@ foreach ($dir in $directories) {
           
           # If not renamed, use original name format.
           if (!($fileFormat)) {
-            $fileFormat = (Split-Path $file -Leaf -Resolve)
+            $fileFormat = (Split-Path $newFile -Leaf -Resolve)
             Write-Host "Formatted file name: $fileFormat"
           } # end if not $fileFormat.
           Write-Host "Deleting existing metadata from $fileFormat."
