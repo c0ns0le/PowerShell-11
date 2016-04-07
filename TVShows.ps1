@@ -185,6 +185,7 @@ $atomicParsley = $dropBox+'\Applications\Open Source\Video Apps\AtomicParsley\At
 $enc = [system.Text.Encoding]::UTF8
 $endBracket = $null
 $exitScript = $false
+$ffmpeg = 'D:\Dropbox\Applications\Open Source\Video Apps\ffmpeg\bin\ffmpeg.exe'
 $folderRename = $null
 $length = $null
 $retries = 10
@@ -268,40 +269,74 @@ foreach ($torrent in $torrents) {
   
   # If complete continue.
   if([int]($torrent.RemainingBytes) -eq 0) {
-    if ($torrent.Label -eq "TV") {
-      # If ignored, just copy files to Untagged directory.
-      foreach ($f in $torrent.Files) {
-        if($f.Path -notlike '*sample*') {
-          if(($f.Path).Endswith('.rar')) {
-            # Use unRarFiles(filepath, destination) function to extract archive
-            UnRarFiles $torrentDirectory $unpacked $f.Path          
-          } elseif(($f.Path).Endswith('.mp4') -or ($f.Path).Endswith('.m4v')) {
-            $torrentPath = $torrentDirectory+$f.Path
-            $newMp4Path = $unpacked+$f.Path
-            if (Test-Path -LiteralPath $torrentPath) {
-              Copy-Item -LiteralPath $torrentPath $newMp4Path -Force -Verbose
-              if (Test-Path -LiteralPath $newMp4Path) {
-                $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
-                if (Test-Path -LiteralPath $torrentDirectory) {
-                  if($torrentDirectory -ne $completed) {
-                    Write-Host "Deleting $torrentDirectory"
-                    del -Recurse $torrentDirectory -Force
-                  } # End of if not completed folder.
-                } # End of torrent directory still exists.
-              }
-            } # End of if TorrentPath exists.
-#          } elseif(($f.Path).Endswith('.avi')) {
-#            $torrentPath = $torrentDirectory+$f.Path
-#            $newPath = $toConvert+$f.Path
-#            if (!(Test-Path $newPath)) {
-#              Move-Item -LiteralPath $torrentPath $newPath -Force -Verbose
-#            }
+    foreach ($f in $torrent.Files) {
+      if($f.Path -notlike '*sample*') {
+        if(($f.Path).Endswith('.rar')) {
+          # Use unRarFiles(filepath, destination) function to extract archive
+          UnRarFiles $torrentDirectory $unpacked $f.Path          
+        } elseif(($f.Path).Endswith('.mp4') -or ($f.Path).Endswith('.m4v')) {
+          $torrentPath = $torrentDirectory+$f.Path
+          # TODO: Rename file using Torrent Title, strip brackets etc.
+          $newMp4Path = $unpacked+$torrent.Name+'.mp4'
+          if (Test-Path -LiteralPath $torrentPath) {
+            Copy-Item -LiteralPath $torrentPath $newMp4Path -Force -Verbose
+            if (Test-Path -LiteralPath $newMp4Path) {
+              $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
+              if (Test-Path -LiteralPath $torrentDirectory) {
+                if($torrentDirectory -ne $completed) {
+                  Write-Host "Deleting $torrentDirectory"
+                  del -Recurse $torrentDirectory -Force
+                } # End of if not completed folder.
+              } # End of torrent directory still exists.
+            }
+          } # End of if TorrentPath exists.
+        } elseif(($f.Path).Endswith('.mkv')) {
+          $torrentPath = $torrentDirectory+$f.Path
+          $newMp4Path = $unpacked+$torrent.Name+'.mp4'
+          if (Test-Path -LiteralPath $torrentPath) {
+            $ffmpegParams = '-i',$torrentPath,'-acodec','copy','-vcodec','copy',$newMp4Path
+            Write-Host "Converting mkv to mp4"
+            try {
+              & $ffmpeg $ffmpegParams
+            } catch {
+              Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+            }
+            Start-Sleep -Seconds 5
+            if (Test-Path -LiteralPath $newMp4Path) {
+              $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
+              if (Test-Path -LiteralPath $torrentDirectory) {
+                if($torrentDirectory -ne $completed) {
+                  Write-Host "Deleting $torrentDirectory"
+                  del -Recurse $torrentDirectory -Force
+                } # End of if not completed folder.
+              } # End of torrent directory still exists.
+            }
           }
-        } # End of if not sample.
-      } # End of foreach $f in torrent.files.
-    } else {
-      break      
-    } # End of if else label is TV.
+        } elseif(($f.Path).Endswith('.avi')) {
+          $torrentPath = $torrentDirectory+$f.Path
+          $newMp4Path = $unpacked+$torrent.Name+'.mp4'
+          if (Test-Path -LiteralPath $torrentPath) {
+            $ffmpegParams = '-i',$torrentPath,'-acodec','copy','-vcodec','libx264','-preset','slow',$newMp4Path
+            Write-Host "Converting avi to mp4"
+            try {
+              & $ffmpeg $ffmpegParams
+            } catch {
+              Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+            }
+            Start-Sleep -Seconds 5
+            if (Test-Path -LiteralPath $newMp4Path) {
+              $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
+              if (Test-Path -LiteralPath $torrentDirectory) {
+                if($torrentDirectory -ne $completed) {
+                  Write-Host "Deleting $torrentDirectory"
+                  del -Recurse $torrentDirectory -Force
+                } # End of if not completed folder.
+              } # End of torrent directory still exists.
+            }
+          }
+        }
+      } # End of if not sample.
+    } # End of foreach $f in torrent.files.
     # If copy succesful, remove torrent.   
   } # End of if Completed.
 } # End of foreach Torrent.
@@ -348,7 +383,7 @@ foreach ($dir in $directories) {
           [string]$episode2 = $null
           $date = (Get-Date).ToUniversalTime().AddHours(-4).ToString("yyyy-MM-dd")
           Write-Host "Date: $date"
-          $titleArray = (Split-Path $newFile -Leaf -Resolve).Split('.-_ ')
+          $titleArray = (Split-Path $newFile -Leaf -Resolve).Split('.-_() ')
           Write-Host "Reading season and episode numbers"
           foreach ($item in $titleArray) {
             $item = $item.Trim()
@@ -448,7 +483,9 @@ foreach ($dir in $directories) {
             $seriesName = 'The Americans (2013)'
           } elseif ($seriesName -like 'Louie*') {
             $seriesName = 'Louie (2010)'
-          }          
+          } elseif ($seriesName -eq 'Daredevil') {
+            $seriesName = 'Marvels Daredevil'
+          }
           $seriesName = $seriesName.Replace("S H I E L D","S.H.I.E.L.D.")
 
           # Tag, rename & move file to correct folder location.
@@ -669,12 +706,12 @@ foreach ($dir in $directories) {
               
           # Tag the file.
           Write-Host "Writing tags to $fileFormat"
-            try {
-              & $atomicParsley $atomicParams
-            } catch {
-              Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
-            }
-            Start-Sleep -Seconds 5
+          try {
+            & $atomicParsley $atomicParams
+          } catch {
+            Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+          }
+          Start-Sleep -Seconds 5
          
           # Move the file to provided destination.
           try {  
