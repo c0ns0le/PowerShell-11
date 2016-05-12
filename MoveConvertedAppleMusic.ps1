@@ -77,10 +77,10 @@ foreach ($flac in $flacFiles) {
     $tagArtist = $key.AlbumArtist
     $tagAlbumArtist = $key.AlbumArtist
     $tagTrackNum = $key.TrackNumber
-	$tagTrackCount = $key.TrackCount
+    $tagTrackCount = $key.TrackCount
     $tagYear = $key.Year
-	$tagDiscNum = $key.DiscNumber
-	$tagDiscCount = $key.DiscCount	
+    $tagDiscNum = $key.DiscNumber
+    $tagDiscCount = $key.DiscCount	
   }
   if ($tagTitle) {
     $year = '--set-tag="DATE='+$tagYear+'"'
