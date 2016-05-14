@@ -33,7 +33,10 @@ function getiTunesMusic() {
         AlbumArtist=$albumArtist;
         Artist=$track.Artist;
         TrackNumber=$track.TrackNumber;
+	TrackCount=$track.TrackCount;
         Year=$track.Year;
+	DiscNumber=$track.DiscNumber;
+	DiscCount=$track.DiscCount;		
         Path=$track.Location;
       })
     }
@@ -62,7 +65,10 @@ foreach ($flac in $flacFiles) {
   $tagAlbumArtist = $null
   $tagAlbum = $null
   $tagTrackNum = $null
+  $tagTrackCount = $null
   $tagTitle = $null
+  $tagDiscNum = $null
+  $tagDiscCount = $null
   
   $m4pPath = ($flac.Fullname).Replace('flac','m4p')
   foreach($key in ($tags.GetEnumerator() | Where-Object {$_.Path -eq $m4pPath})) {
@@ -71,7 +77,10 @@ foreach ($flac in $flacFiles) {
     $tagArtist = $key.AlbumArtist
     $tagAlbumArtist = $key.AlbumArtist
     $tagTrackNum = $key.TrackNumber
+    $tagTrackCount = $key.TrackCount
     $tagYear = $key.Year
+    $tagDiscNum = $key.DiscNumber
+    $tagDiscCount = $key.DiscCount	
   }
   if ($tagTitle) {
     $year = '--set-tag="DATE='+$tagYear+'"'
@@ -79,9 +88,13 @@ foreach ($flac in $flacFiles) {
     $albumArtist = '--set-tag="ALBUM ARTIST='+$tagAlbumArtist.Replace('"',"'")+'"'
     $album = '--set-tag="ALBUM='+$tagAlbum.Replace('"','')+'"'
     $trackNum = '--set-tag="TRACKNUMBER='+$tagTrackNum+'"'
+    $trackCount = '--set-tag="TRACKCOUNT='+$tagTrackCount+'"'
     $title = '--set-tag="TITLE='+$tagTitle.Replace('"','')+'"'
+    $discNum = '--set-tag="DISCNUMBER='+$tagDiscNum+'"'
+    $discCount = '--set-tag="DISCCOUNT='+$tagDiscCount+'"'
+    
     #Tag File
-    $exec = '& "'+$metaflac+'" --remove-all-tags '+$artist+' '+$album+' '+$albumArtist+' '+$trackNum+' '+$title+' '+$year+' "'+$flac+'"'
+    $exec = '& "'+$metaflac+'" --remove-all-tags '+$artist+' '+$album+' '+$albumArtist+' '+$trackNum+' '+$trackCount+' '+$title+' '+$year+' '+$discNum+' '+$discCount+' "'+$flac+'"'
     Invoke-Expression $exec
        
     # Move file to destination
@@ -94,8 +107,11 @@ foreach ($flac in $flacFiles) {
       
       # Delete empty folders in Apple Music directory.
       sl $appleMusic
-      Get-ChildItem -recurse | Where {$_.PSIsContainer -and `
-        @(Get-ChildItem -Lit $_.Fullname -r | Where {!$_.PSIsContainer}).Length -eq 0} | Remove-Item -recurse
+      Get-ChildItem -recurse | Where {
+        $_.PSIsContainer -and `
+        @(Get-ChildItem -Lit $_.Fullname -r | 
+          Where {!$_.PSIsContainer}).Length -eq 0
+      } | Remove-Item -recurse -Force -ErrorAction SilentlyContinue
     }
   }
 }
