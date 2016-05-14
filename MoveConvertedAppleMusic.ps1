@@ -33,10 +33,10 @@ function getiTunesMusic() {
         AlbumArtist=$albumArtist;
         Artist=$track.Artist;
         TrackNumber=$track.TrackNumber;
-	TrackCount=$track.TrackCount;
+	      TrackCount=$track.TrackCount;
         Year=$track.Year;
-	DiscNumber=$track.DiscNumber;
-	DiscCount=$track.DiscCount;		
+	      DiscNumber=$track.DiscNumber;
+	      DiscCount=$track.DiscCount;		
         Path=$track.Location;
       })
     }
