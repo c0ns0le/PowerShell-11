@@ -94,11 +94,8 @@ foreach ($flac in $flacFiles) {
       
       # Delete empty folders in Apple Music directory.
       sl $appleMusic
-      Get-ChildItem -recurse | Where {
-        $_.PSIsContainer -and `
-        @(Get-ChildItem -Lit $_.Fullname -r | 
-          Where {!$_.PSIsContainer}).Length -eq 0
-      } | Remove-Item -recurse -Force -ErrorAction SilentlyContinue
+      Get-ChildItem -recurse | Where {$_.PSIsContainer -and `
+        @(Get-ChildItem -Lit $_.Fullname -r | Where {!$_.PSIsContainer}).Length -eq 0} | Remove-Item -recurse
     }
   }
 }

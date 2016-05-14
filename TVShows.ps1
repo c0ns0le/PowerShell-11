@@ -268,77 +268,103 @@ foreach ($torrent in $torrents) {
   $torrentDirectory = $torrent.SavePath+"\"
   
   # If complete continue.
-  if([int]($torrent.RemainingBytes) -eq 0) {
-    foreach ($f in $torrent.Files) {
-      if($f.Path -notlike '*sample*') {
-        if(($f.Path).Endswith('.rar')) {
-          # Use unRarFiles(filepath, destination) function to extract archive
-          UnRarFiles $torrentDirectory $unpacked $f.Path          
-        } elseif(($f.Path).Endswith('.mp4') -or ($f.Path).Endswith('.m4v')) {
-          $torrentPath = $torrentDirectory+$f.Path
-          # TODO: Rename file using Torrent Title, strip brackets etc.
-          $newMp4Path = $unpacked+$torrent.Name+'.mp4'
-          if (Test-Path -LiteralPath $torrentPath) {
-            Copy-Item -LiteralPath $torrentPath $newMp4Path -Force -Verbose
-            if (Test-Path -LiteralPath $newMp4Path) {
-              $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
-              if (Test-Path -LiteralPath $torrentDirectory) {
-                if($torrentDirectory -ne $completed) {
-                  Write-Host "Deleting $torrentDirectory"
-                  del -Recurse $torrentDirectory -Force
-                } # End of if not completed folder.
-              } # End of torrent directory still exists.
+  if([long]($torrent.RemainingBytes) -eq 0) {
+    if (($torrent.Label).ToLower() -ne "keep") {
+      # Get number of files.
+      $torrentFiles = @($torrent.Files | ? { 
+        ($_.Path -notlike '*sample*' -and ($_.Path -like '*.mp4' -or $_.Path -like '*.m4v' -or $_.Path -like '*.mkv')) 
+      }).Count
+      foreach ($f in $torrent.Files) {      
+        if($f.Path -notlike '*sample*') {
+          $remove = $false
+          if(($f.Path).Endswith('.rar')) {
+            # Use unRarFiles(filepath, destination) function to extract archive
+            UnRarFiles $torrentDirectory $unpacked $f.Path          
+          } elseif(($f.Path).Endswith('.mp4') -or ($f.Path).Endswith('.m4v')) {
+            $torrentPath = $torrentDirectory+$f.Path
+            # Rename file using Torrent Title, strip brackets etc.
+            if ($torrentFiles -gt 1) {
+              $torrentName = (Split-Path $f.Path -leaf).ToLower() -replace "\.(mp4|m4v)$",""
+            } else {
+              $torrentName = $torrent.Name
+            }      
+            $newMp4Path = $unpacked+$torrentName+'.mp4'
+            if (Test-Path -LiteralPath $torrentPath) {
+              Copy-Item -LiteralPath $torrentPath $newMp4Path -Force -Verbose
+              if (Test-Path -LiteralPath $newMp4Path) {
+                $remove = $true
+                if (Test-Path -LiteralPath $torrentDirectory) {
+                  if($torrentDirectory -ne $completed) {
+                    Write-Host "Deleting $torrentDirectory"
+                    del -Recurse $torrentDirectory -Force
+                  } # End of if not completed folder.
+                } # End of torrent directory still exists.
+              }
+            } # End of if TorrentPath exists.
+          } elseif(($f.Path).Endswith('.mkv')) {
+            $torrentPath = $torrentDirectory+$f.Path
+            # Rename file using Torrent Title, strip brackets etc.
+            if ($torrentFiles -gt 1) {
+              $torrentName = (Split-Path $f.Path -leaf).ToLower() -replace "\.(mkv)$",""
+            } else {
+              $torrentName = $torrent.Name
+            }      
+            $newMp4Path = $unpacked+$torrentName+'.mp4'
+            if (Test-Path -LiteralPath $torrentPath) {
+              $ffmpegParams = '-i',$torrentPath,'-acodec','copy','-vcodec','copy',$newMp4Path
+              Write-Host "Converting mkv to mp4"
+              try {
+                & $ffmpeg $ffmpegParams
+              } catch {
+                Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+              }
+              Start-Sleep -Seconds 5
+              if (Test-Path -LiteralPath $newMp4Path) {
+                $remove = $true
+                if (Test-Path -LiteralPath $torrentDirectory) {
+                  if($torrentDirectory -ne $completed) {
+                    Write-Host "Deleting $torrentDirectory"
+                    del -Recurse $torrentDirectory -Force
+                  } # End of if not completed folder.
+                } # End of torrent directory still exists.
+              }
             }
-          } # End of if TorrentPath exists.
-        } elseif(($f.Path).Endswith('.mkv')) {
-          $torrentPath = $torrentDirectory+$f.Path
-          $newMp4Path = $unpacked+$torrent.Name+'.mp4'
-          if (Test-Path -LiteralPath $torrentPath) {
-            $ffmpegParams = '-i',$torrentPath,'-acodec','copy','-vcodec','copy',$newMp4Path
-            Write-Host "Converting mkv to mp4"
-            try {
-              & $ffmpeg $ffmpegParams
-            } catch {
-              Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
-            }
-            Start-Sleep -Seconds 5
-            if (Test-Path -LiteralPath $newMp4Path) {
-              $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
-              if (Test-Path -LiteralPath $torrentDirectory) {
-                if($torrentDirectory -ne $completed) {
-                  Write-Host "Deleting $torrentDirectory"
-                  del -Recurse $torrentDirectory -Force
-                } # End of if not completed folder.
-              } # End of torrent directory still exists.
+          } elseif(($f.Path).Endswith('.avi')) {
+            $torrentPath = $torrentDirectory+$f.Path
+            if ($torrentFiles -gt 1) {
+              $torrentName = (Split-Path $f.Path -leaf).ToLower() -replace "\.(avi)$",""
+            } else {
+              $torrentName = $torrent.Name
+            }      
+            $newMp4Path = $unpacked+$torrentName+'.mp4'
+            if (Test-Path -LiteralPath $torrentPath) {
+              $ffmpegParams = '-i',$torrentPath,'-acodec','copy','-vcodec','libx264','-preset','slow',$newMp4Path
+              Write-Host "Converting avi to mp4"
+              try {
+                & $ffmpeg $ffmpegParams
+              } catch {
+                Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+              }
+              Start-Sleep -Seconds 5
+              if (Test-Path -LiteralPath $newMp4Path) {
+                $remove = $true
+                if (Test-Path -LiteralPath $torrentDirectory) {
+                  if($torrentDirectory -ne $completed) {
+                    Write-Host "Deleting $torrentDirectory"
+                    del -Recurse $torrentDirectory -Force
+                  } # End of if not completed folder.
+                } # End of torrent directory still exists.
+              }
             }
           }
-        } elseif(($f.Path).Endswith('.avi')) {
-          $torrentPath = $torrentDirectory+$f.Path
-          $newMp4Path = $unpacked+$torrent.Name+'.mp4'
-          if (Test-Path -LiteralPath $torrentPath) {
-            $ffmpegParams = '-i',$torrentPath,'-acodec','copy','-vcodec','libx264','-preset','slow',$newMp4Path
-            Write-Host "Converting avi to mp4"
-            try {
-              & $ffmpeg $ffmpegParams
-            } catch {
-              Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
-            }
-            Start-Sleep -Seconds 5
-            if (Test-Path -LiteralPath $newMp4Path) {
-              $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
-              if (Test-Path -LiteralPath $torrentDirectory) {
-                if($torrentDirectory -ne $completed) {
-                  Write-Host "Deleting $torrentDirectory"
-                  del -Recurse $torrentDirectory -Force
-                } # End of if not completed folder.
-              } # End of torrent directory still exists.
-            }
-          }
-        }
-      } # End of if not sample.
-    } # End of foreach $f in torrent.files.
-    # If copy succesful, remove torrent.   
-  } # End of if Completed.
+          if ($remove -eq $true) {
+            $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
+          }       
+        } # End of if not sample.
+      } # End of foreach $f in torrent.files.
+      # If copy succesful, remove torrent.   
+    } # End of if Completed.
+  } # End of if not keep.
 } # End of foreach Torrent.
   
 Start-Sleep -Seconds 3
