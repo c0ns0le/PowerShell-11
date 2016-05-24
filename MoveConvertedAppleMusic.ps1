@@ -80,7 +80,7 @@ foreach ($flac in $flacFiles) {
     $tagTrackCount = $key.TrackCount
     $tagYear = $key.Year
     $tagDiscNum = $key.DiscNumber
-    $tagDiscCount = $key.DiscCount	
+    $tagDiscCount = $key.DiscCount
   }
   if ($tagTitle) {
     $year = '--set-tag="DATE='+$tagYear+'"'
@@ -88,10 +88,10 @@ foreach ($flac in $flacFiles) {
     $albumArtist = '--set-tag="ALBUM ARTIST='+$tagAlbumArtist.Replace('"',"'")+'"'
     $album = '--set-tag="ALBUM='+$tagAlbum.Replace('"','')+'"'
     $trackNum = '--set-tag="TRACKNUMBER='+$tagTrackNum+'"'
-    $trackCount = '--set-tag="TRACKCOUNT='+$tagTrackCount+'"'
+    $trackCount = '--set-tag="TOTALTRACKS='+$tagTrackCount+'"'
     $title = '--set-tag="TITLE='+$tagTitle.Replace('"','')+'"'
     $discNum = '--set-tag="DISCNUMBER='+$tagDiscNum+'"'
-    $discCount = '--set-tag="DISCCOUNT='+$tagDiscCount+'"'
+    $discCount = '--set-tag="TOTALDISCS='+$tagDiscCount+'"'
     
     #Tag File
     $exec = '& "'+$metaflac+'" --remove-all-tags '+$artist+' '+$album+' '+$albumArtist+' '+$trackNum+' '+$trackCount+' '+$title+' '+$year+' '+$discNum+' '+$discCount+' "'+$flac+'"'

@@ -27,6 +27,10 @@ function EncodeWithFFMPEG($inputStr,$outputStr) {
     Write-Host "Encoding $inputStr to $outputStr..."
     [Diagnostics.Process]::Start($ffmpeg, $params).WaitForExit()
   } catch {
+    "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+    "Exception: " + $_.Exception.Message >> $errorLog
+    "Item: " + $inputStr >> $errorLog
+    Invoke-Item $errorLog
     return $false
   }
   return $true
@@ -50,6 +54,10 @@ function EncodeWithHB($inputStr,$outputStr){
     Write-Host "Encoding $inputStr to $outputStr..."
     [Diagnostics.Process]::Start($handbrake, $params).WaitForExit()
   } catch {
+    "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+    "Exception: " + $_.Exception.Message >> $errorLog
+    "Item: " + $inputStr >> $errorLog
+    Invoke-Item $errorLog
     return $false
   }
   return $true
@@ -69,6 +77,10 @@ function UnRarFiles($torrentDirectory,$outputDir,$file) {
     Write-Host "Upacking $torrentDirectory to $outputDir"
     [Diagnostics.Process]::Start($unrar, $unRarParams).WaitForExit()
   } catch {
+    "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+    "Exception: " + $_.Exception.Message >> $errorLog
+    "Item: " + $file >> $errorLog
+    Invoke-Item $errorLog
     return $false
   }
 }
@@ -90,12 +102,16 @@ function GetSeriesId($showName) {
           $seriesId = $series.seriesid
           $seriesName = $series.SeriesName
           break
-        } # end if $series.SeriesName equal to $seriesName
-      } # end foreach $Series in $series_ws.Data.Series.
-    } # end if $series_ws.
+        }
+      }
+    }
   } catch {
+    "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+    "Exception: " + $_.Exception.Message >> $errorLog
+    "Item: " + $showName >> $errorLog
+    Invoke-Item $errorLog
     return $false
-  } # end try catch.
+  }
   return $seriesId,$seriesName
 }
 
@@ -179,13 +195,14 @@ function DownloadFile($url, $targetFile = 'c:\temp\xml.xml') {
 # VARIABLES ETC                                                                #
 ################################################################################
 
-$destDrive = 'D:\'
 $dropBox = "D:\Dropbox"
+$aacgain = $dropBox+'\Applications\Open Source\Audio Apps\aacgain_1_9\aacgain.exe'
+$destDrive = 'D:\'
 $atomicParsley = $dropBox+'\Applications\Open Source\Video Apps\AtomicParsley\AtomicParsley.exe'
 $enc = [system.Text.Encoding]::UTF8
 $endBracket = $null
 $exitScript = $false
-$ffmpeg = 'D:\Dropbox\Applications\Open Source\Video Apps\ffmpeg\bin\ffmpeg.exe'
+$ffmpeg = $dropBox+'\Applications\Open Source\Video Apps\ffmpeg\bin\ffmpeg.exe'
 $folderRename = $null
 $length = $null
 $retries = 10
@@ -202,6 +219,7 @@ $unpacked = $uTorrentHome+'Unpacked\'
 $untagged = $uTorrentHome+'Untagged\'
 $toConvert = $uTorrentHome+'To Convert\'
 $connectionLog = $uTorrentHome+"ConnectionIssues.txt"
+$script:errorLog = $uTorrentHome+"TVShows_ErrorLog.txt"
 $script:waitFolder = $uTorrentHome+"Untagged\"
 $uTorrentPW = $env:UTORRENT_PW
 $uTorrentUser = $env:UTORRENT_USER
@@ -238,8 +256,6 @@ if (!(Test-Path $untagged)) {
 # Check if Google is available.
 [int]$retry = 0
 while ((!(Test-Connection -computer 8.8.8.8 -count 1 -quiet)) -and ($retry -lt $retries)) {
-  $timestamp = Get-Date -format "yyyy-MM-dd HH:mm:ss:ff"
-  $timestamp+", Internet connection unavailable.  Sleeping 10 seconds.`n" >> $connectionLog
   Start-Sleep -Seconds 10
   $retry++
 }
@@ -254,14 +270,13 @@ foreach ($torrent in $torrents) {
   # If unable to connect to the tvdb, exit the script.
   [int]$retry = 0
   while ((!(Test-Connection -computer 'thetvdb.com' -count 1 -quiet)) -and ($retry -lt $retries)) {
-    $timestamp = Get-Date -format "yyyy-MM-dd HH:mm:ss:ff"
-    $timestamp+", Unable to connect to theTVDb.com.  Sleeping 10 seconds.`n" >> $connectionLog    
     Start-Sleep -Seconds 10 
     $retry++
   }
   if ($retry -eq $retries) {
     $timestamp = Get-Date -format "yyyy-MM-dd HH:mm:ss:ff"
     $timestamp+", Unable to establish connection to theTVDb.com.  Exiting.`n" >> $connectionLog
+    Invoke-Item $connectionLog
     exit
   }
   
@@ -269,7 +284,7 @@ foreach ($torrent in $torrents) {
   
   # If complete continue.
   if([long]($torrent.RemainingBytes) -eq 0) {
-    if (($torrent.Label).ToLower() -ne "keep") {
+    if ($torrent.Label -match "(.*)([sS](\d{1,2})[eE](\d{1,2})|(\d{1,2})[xX](\d{1,2}))(.*)") {
       # Get number of files.
       $torrentFiles = @($torrent.Files | ? { 
         ($_.Path -notlike '*sample*' -and ($_.Path -like '*.mp4' -or $_.Path -like '*.m4v' -or $_.Path -like '*.mkv')) 
@@ -297,10 +312,10 @@ foreach ($torrent in $torrents) {
                   if($torrentDirectory -ne $completed) {
                     Write-Host "Deleting $torrentDirectory"
                     del -Recurse $torrentDirectory -Force
-                  } # End of if not completed folder.
-                } # End of torrent directory still exists.
+                  }
+                }
               }
-            } # End of if TorrentPath exists.
+            }
           } elseif(($f.Path).Endswith('.mkv')) {
             $torrentPath = $torrentDirectory+$f.Path
             # Rename file using Torrent Title, strip brackets etc.
@@ -316,7 +331,10 @@ foreach ($torrent in $torrents) {
               try {
                 & $ffmpeg $ffmpegParams
               } catch {
-                Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: " + $_.Exception.Message >> $errorLog
+                "Item: " + $newMp4Path >> $errorLog
+                Invoke-Item $errorLog
               }
               Start-Sleep -Seconds 5
               if (Test-Path -LiteralPath $newMp4Path) {
@@ -325,8 +343,8 @@ foreach ($torrent in $torrents) {
                   if($torrentDirectory -ne $completed) {
                     Write-Host "Deleting $torrentDirectory"
                     del -Recurse $torrentDirectory -Force
-                  } # End of if not completed folder.
-                } # End of torrent directory still exists.
+                  }
+                }
               }
             }
           } elseif(($f.Path).Endswith('.avi')) {
@@ -343,7 +361,10 @@ foreach ($torrent in $torrents) {
               try {
                 & $ffmpeg $ffmpegParams
               } catch {
-                Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: " + $_.Exception.Message >> $errorLog
+                "Item: " + $f.FullName >> $errorLog
+                Invoke-Item $errorLog
               }
               Start-Sleep -Seconds 5
               if (Test-Path -LiteralPath $newMp4Path) {
@@ -352,20 +373,19 @@ foreach ($torrent in $torrents) {
                   if($torrentDirectory -ne $completed) {
                     Write-Host "Deleting $torrentDirectory"
                     del -Recurse $torrentDirectory -Force
-                  } # End of if not completed folder.
-                } # End of torrent directory still exists.
+                  } 
+                } 
               }
             }
           }
           if ($remove -eq $true) {
             $utorrentclient.Torrents.Remove($torrent, [UTorrentAPI.TorrentRemovalOptions]::TorrentFileAndData)
           }       
-        } # End of if not sample.
-      } # End of foreach $f in torrent.files.
-      # If copy succesful, remove torrent.   
-    } # End of if Completed.
-  } # End of if not keep.
-} # End of foreach Torrent.
+        } 
+      }
+    }
+  } 
+} 
   
 Start-Sleep -Seconds 3
 $directories = $unpacked,$untagged
@@ -538,18 +558,21 @@ foreach ($dir in $directories) {
                   Write-Host "Genre: $genre"
                   $network = $baseSeriesData.Network
                   Write-Host "Network: $network"
-                } # end if $baseseries_ws.
+                }
               } catch {
-                Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName 
-              } # end try catch.              
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: " + $_.Exception.Message >> $errorLog
+                "Item: " + $file.FullName >> $errorLog
+                Invoke-Item $errorLog
+              }
             } else {
               Write-Host "Unable to connect to thetvdb.com, aborting tag."
               $waitFolder = $env:USERPROFILE+"\Downloads\Torrents\Untagged\"
               Write-Host "Moving $file.name to $waitFolder."
               Move-Item -LiteralPath $file $waitFolder -Force -Verbose
               break
-            } # End of if/else $seriesId
-          } # End of if/else $seriesName
+            } 
+          } 
           
           if($seriesId) {
             if ($season -and $episode) {
@@ -557,7 +580,7 @@ foreach ($dir in $directories) {
               $episodeId = [int]$episode
               if ($episode2) {
                 $episode2Id = [int]$episode2
-              } #end if $episode2
+              } 
               try {
                 Write-Host "Downloading episode data from theTVDb.com"
                 $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episodeId+"/en.xml"
@@ -570,7 +593,7 @@ foreach ($dir in $directories) {
                   Write-Host "Episode description: $description"
                   $airDate = $episodeData.FirstAired
                   Write-Host "Air date: $airDate"
-                } # end if $episode_ws.
+                } 
                 if ($episode2Id) {
                   Write-Host "Downloading episode 2 data from theTVDb.com"
                   $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episode2Id+"/en.xml"
@@ -581,29 +604,32 @@ foreach ($dir in $directories) {
                     Write-Host "Episode 2 name: $episode2Name"
                     $description = $description+' '+$episode2Data.Overview
                     Write-Host "Combined description: $description"
-                  } # end if $episode2_ws.
-                } # end if $episode2Id.
+                  } 
+                } 
               } catch {
-                Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName 
-              } # End of try catch.
-            } # End of if/else $season and $episode.
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: " + $_.Exception.Message >> $errorLog
+                "Item: " + $file.FullName >> $errorLog
+                Invoke-Item $errorLog
+              }
+            }
             
             # Add leading zeros to season and episode numbers.
             $season = $season.PadLeft(2,"0")            
             $episode = $episode.PadLeft(2,"0")
             if ($episode2) {
               $episode2 = $episode2.PadLeft(2,"0")
-            } # end if $episode exists and is less than 10, and shorter than 2 characters.
+            }
             
             # Set destination folder based on the show name and season.
             Write-Host "Setting destination directory based on series name, season and episode numbers."
-            $destination = 'D:\TV Shows\'+$seriesName+"\Season "+$season+"\"
+            $destination = $destDrive+'TV Shows\'+$seriesName+"\Season "+$season+"\"
             
             # Clean unprintable characters and set fileformat.
             $episodeName = $episodeName.Replace(':','_').Replace('?','').Replace('/','-').Replace('\','-').Replace(',','-').Trim()
             if ($episode2Name) { 
               $episode2Name = $episode2Name.Replace(':','_').Replace('?','').Replace('/','-').Replace('\','-').Replace(',','-').Trim()
-            } # end if $episode2Name.
+            }
             if ($episode2Id) {      
               $fileFormat = $seriesName+" - S"+$season+"E"+$episode+"-E"+$episode2+" - "+$episodeName+" & "+$episode2Name+".mp4"    
             } else {
@@ -615,15 +641,18 @@ foreach ($dir in $directories) {
               Write-Host "Renaming $file to $fileFormat"
               Rename-Item -Path $newFile $fileFormat -Force -Verbose
             } catch {
-              Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName 
-            } # end try catch.
-          } # End of if $seriesId.
+              "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+              "Exception: " + $_.Exception.Message >> $errorLog
+              "Item: " + $file.FullName >> $errorLog
+              Invoke-Item $errorLog
+            }
+          }
           
           # If not renamed, use original name format.
           if (!($fileFormat)) {
             $fileFormat = (Split-Path $newFile -Leaf -Resolve)
             Write-Host "Formatted file name: $fileFormat"
-          } # end if not $fileFormat.
+          }
           Write-Host "Deleting existing metadata from $fileFormat."
           $fullFilePath = $dir+$fileFormat
           Write-Host "File path: $fullFilePath"
@@ -631,7 +660,10 @@ foreach ($dir in $directories) {
             $atomicParams = $fullFilePath,'--metaEnema','--overWrite'
             & $atomicParsley $atomicParams
           } catch {
-            Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+            "Exception: " + $_.Exception.Message >> $errorLog
+            "Item: " + $file.FullName >> $errorLog
+            Invoke-Item $errorLog
           }
           # If atomic parsley fails due to file errors, re-encode the file using Handbrake.
           if (($LastExitCode -ne 0) -and ($LastExitCode -ne $null)) {
@@ -640,7 +672,7 @@ foreach ($dir in $directories) {
             Write-Host "New file: $newFile"
             if ($newFile -eq $fullFilePath) {
               $newFile.Replace('.mp4','(2).mp4')
-            } # end if $newFile -equal to $fullFilePath
+            }
             EncodeWithHB $fullFilePath $newFile
             if (Test-Path $newFile) {
               Remove-Item $fullFilePath -Force -Verbose
@@ -682,11 +714,11 @@ foreach ($dir in $directories) {
             $genre = $genre.Replace('|',', ').Trim(',',' ')
           } else { 
             $genre = 'TV Show' 
-          } # end if !$genre.
+          }
           $atomicParams += @('--genre',$genre,'--stik','TV Show')
           if (!($actors)) { 
             $actors = 'N/A' 
-          } # end if !$actors.
+          }
           $atomicParams += @('--artist',$actors)
           if ($airDate) {
             $airDate += 'T12:00:00Z'
@@ -694,40 +726,40 @@ foreach ($dir in $directories) {
             $airDate = $date+'T12:00:00Z'
           } else {
             $airDate = (Get-Date -Format s)+'Z'
-          } # end if elseif else $airdate.
+          }
           $atomicParams += @('--year',$airDate)
           if ($episodeDesc) {
             $atomicParams += @('--TVEpisode',$episodeDesc)
-          } # end if $episodeDesc.
+          }
           if (!($episodeId)) {
             $episodeId = [int]$episode
-          } # end if !$episodeId.
+          }
           $atomicParams += @('--TVEpisodeNum',$episodeId,'--tracknum',$episodeId)
           if(!($seasonId)) {
             $seasonId = [int]$seasons
-          } # end if !$seasonId.
+          }
           $atomicParams += @('--TVSeason',$seasonId)
           if ($contentRating) {
             $atomicParams += @('--contentRating',$contentRating)
-          } # end if $contentRating.
+          }
           if ($title) {
             $atomicParams += @('--title',$title)
-          } # end if $title
+          }
           if ($seriesName) {
             $atomicParams += @('--albumArtist',$seriesName,'--TVShowName',$seriesName)
-          } # end if $seriesName.
+          }
           if ($album) {
             $atomicParams += @('--album',$album)
-          } # end if $album.
+          }
           if ($network) {
             $atomicParams += @('--TVNetwork',$network)
-          } # end if $network.
+          }
           if ($description) {
             $atomicParams += @('--description',$description,'--longdesc',$description)
-          } # end if $description.
+          }
           if (Test-Path $imgFile) {
             $atomicParams += @('--artwork',$imgFile)
-          } # end if $imgFile
+          }
           $atomicParams += @('--overWrite')
               
           # Tag the file.
@@ -735,7 +767,10 @@ foreach ($dir in $directories) {
           try {
             & $atomicParsley $atomicParams
           } catch {
-            Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName
+            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+            "Exception: " + $_.Exception.Message >> $errorLog
+            "Item: " + $file.FullName >> $errorLog
+            Invoke-Item $errorLog
           }
           Start-Sleep -Seconds 5
          
@@ -743,22 +778,40 @@ foreach ($dir in $directories) {
           try {  
             if (Test-Path $fileFormat) {
               Move-Item -Path $fileFormat -Destination $destination -Force -Verbose
-            } # end if Test-Path $fileFormat.
+            }
           } catch {
-            Write-Host "`r`nError: "$_.Exception.Message"`r`n"$_.Exception.ItemName | Out-File $powershellDir'Error.log' -Append
-          } # end try catch.
+            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+            "Exception: " + $_.Exception.Message >> $errorLog
+            "Item: " + $file.FullName >> $errorLog
+            Invoke-Item $errorLog
+          }
           $newMp4Path = $destination+$fileFormat
           
+          # Normalize Audio
+          try {
+            $aacParams = '/k','/r',$newMp4Path
+            & $aacgain $aacParams
+          } catch {
+            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+            "Exception: " + $_.Exception.Message >> $errorLog
+            "Item: " + $file.FullName >> $errorLog
+            Invoke-Item $errorLog
+          }          
           $exitLoop = $true
-        } catch {
+        } catch  {
+          "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+          "Exception: " + $_.Exception.Message >> $errorLog
+          "Item: " + $_.Exception.ItemName >> $errorLog
+          Invoke-Item $errorLog
+          
           mv $newFile $waitFolder -Force
           $exitLoop = $true
           return $false      
-        } # End of try/catch.
+        }
       } while ($exitLoop -eq $false)
-    } # End of foreach $file in $files.
-  } # End of if $files.
-} # End of for each directory.
+    }
+  }
+}
 
 # Call a Plex Refresh after adding the files.
-# refreshPlex
+refreshPlex
