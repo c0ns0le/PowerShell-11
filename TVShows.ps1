@@ -30,7 +30,10 @@ function EncodeWithFFMPEG($inputStr,$outputStr) {
     "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
     "Exception: " + $_.Exception.Message >> $errorLog
     "Item: " + $inputStr >> $errorLog
-    Invoke-Item $errorLog
+    if ([bool](get-process  notepad -ea 0)) {
+      Stop-Process notepad 
+      Invoke-Item $errorLog
+    }
     return $false
   }
   return $true
@@ -57,7 +60,10 @@ function EncodeWithHB($inputStr,$outputStr){
     "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
     "Exception: " + $_.Exception.Message >> $errorLog
     "Item: " + $inputStr >> $errorLog
-    Invoke-Item $errorLog
+    if ([bool](get-process  notepad -ea 0)) {
+      Stop-Process notepad 
+      Invoke-Item $errorLog
+    }
     return $false
   }
   return $true
@@ -80,7 +86,10 @@ function UnRarFiles($torrentDirectory,$outputDir,$file) {
     "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
     "Exception: " + $_.Exception.Message >> $errorLog
     "Item: " + $file >> $errorLog
-    Invoke-Item $errorLog
+    if ([bool](get-process  notepad -ea 0)) {
+      Stop-Process notepad 
+      Invoke-Item $errorLog
+    }
     return $false
   }
 }
@@ -109,7 +118,10 @@ function GetSeriesId($showName) {
     "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
     "Exception: " + $_.Exception.Message >> $errorLog
     "Item: " + $showName >> $errorLog
-    Invoke-Item $errorLog
+    if ([bool](get-process  notepad -ea 0)) {
+      Stop-Process notepad 
+      Invoke-Item $errorLog
+    }
     return $false
   }
   return $seriesId,$seriesName
@@ -284,7 +296,7 @@ foreach ($torrent in $torrents) {
   
   # If complete continue.
   if([long]($torrent.RemainingBytes) -eq 0) {
-    if ($torrent.Label -match "(.*)([sS](\d{1,2})[eE](\d{1,2})|(\d{1,2})[xX](\d{1,2}))(.*)") {
+    if ($torrent.Name -match "(.*)([sS](\d{1,2})[eE](\d{1,2})|(\d{1,2})[xX](\d{1,2})|(?:^|\W)season(?:$|\W)(\d{1,2}))(.*)") {
       # Get number of files.
       $torrentFiles = @($torrent.Files | ? { 
         ($_.Path -notlike '*sample*' -and ($_.Path -like '*.mp4' -or $_.Path -like '*.m4v' -or $_.Path -like '*.mkv')) 
@@ -334,7 +346,10 @@ foreach ($torrent in $torrents) {
                 "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
                 "Exception: " + $_.Exception.Message >> $errorLog
                 "Item: " + $newMp4Path >> $errorLog
-                Invoke-Item $errorLog
+                if ([bool](get-process  notepad -ea 0)) {
+                  Stop-Process notepad 
+                  Invoke-Item $errorLog
+                }
               }
               Start-Sleep -Seconds 5
               if (Test-Path -LiteralPath $newMp4Path) {
@@ -364,7 +379,10 @@ foreach ($torrent in $torrents) {
                 "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
                 "Exception: " + $_.Exception.Message >> $errorLog
                 "Item: " + $f.FullName >> $errorLog
-                Invoke-Item $errorLog
+                if ([bool](get-process  notepad -ea 0)) {
+                  Stop-Process notepad 
+                  Invoke-Item $errorLog
+                }
               }
               Start-Sleep -Seconds 5
               if (Test-Path -LiteralPath $newMp4Path) {
@@ -383,7 +401,13 @@ foreach ($torrent in $torrents) {
           }       
         } 
       }
-    }
+    } else { 
+      "Failed regex on "+$torrent.name >> $errorLog
+      if ([bool](get-process  notepad -ea 0)) {
+        Stop-Process notepad 
+        Invoke-Item $errorLog
+      }
+    }     
   } 
 } 
   
@@ -563,7 +587,10 @@ foreach ($dir in $directories) {
                 "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
                 "Exception: " + $_.Exception.Message >> $errorLog
                 "Item: " + $file.FullName >> $errorLog
-                Invoke-Item $errorLog
+                if ([bool](get-process  notepad -ea 0)) {
+                  Stop-Process notepad 
+                  Invoke-Item $errorLog
+                }
               }
             } else {
               Write-Host "Unable to connect to thetvdb.com, aborting tag."
@@ -610,7 +637,10 @@ foreach ($dir in $directories) {
                 "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
                 "Exception: " + $_.Exception.Message >> $errorLog
                 "Item: " + $file.FullName >> $errorLog
-                Invoke-Item $errorLog
+                if ([bool](get-process  notepad -ea 0)) {
+                  Stop-Process notepad 
+                  Invoke-Item $errorLog
+                }
               }
             }
             
@@ -644,7 +674,10 @@ foreach ($dir in $directories) {
               "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
               "Exception: " + $_.Exception.Message >> $errorLog
               "Item: " + $file.FullName >> $errorLog
-              Invoke-Item $errorLog
+              if ([bool](get-process  notepad -ea 0)) {
+                Stop-Process notepad 
+                Invoke-Item $errorLog
+              }
             }
           }
           
@@ -663,7 +696,10 @@ foreach ($dir in $directories) {
             "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
             "Exception: " + $_.Exception.Message >> $errorLog
             "Item: " + $file.FullName >> $errorLog
-            Invoke-Item $errorLog
+            if ([bool](get-process  notepad -ea 0)) {
+              Stop-Process notepad 
+              Invoke-Item $errorLog
+            }
           }
           # If atomic parsley fails due to file errors, re-encode the file using Handbrake.
           if (($LastExitCode -ne 0) -and ($LastExitCode -ne $null)) {
@@ -770,7 +806,10 @@ foreach ($dir in $directories) {
             "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
             "Exception: " + $_.Exception.Message >> $errorLog
             "Item: " + $file.FullName >> $errorLog
-            Invoke-Item $errorLog
+            if ([bool](get-process  notepad -ea 0)) {
+              Stop-Process notepad 
+              Invoke-Item $errorLog
+            }
           }
           Start-Sleep -Seconds 5
          
@@ -783,7 +822,10 @@ foreach ($dir in $directories) {
             "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
             "Exception: " + $_.Exception.Message >> $errorLog
             "Item: " + $file.FullName >> $errorLog
-            Invoke-Item $errorLog
+            if ([bool](get-process  notepad -ea 0)) {
+              Stop-Process notepad 
+              Invoke-Item $errorLog
+            }
           }
           $newMp4Path = $destination+$fileFormat
           
@@ -795,14 +837,20 @@ foreach ($dir in $directories) {
             "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
             "Exception: " + $_.Exception.Message >> $errorLog
             "Item: " + $file.FullName >> $errorLog
-            Invoke-Item $errorLog
+            if ([bool](get-process  notepad -ea 0)) {
+              Stop-Process notepad 
+              Invoke-Item $errorLog
+            }
           }          
           $exitLoop = $true
         } catch  {
           "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
           "Exception: " + $_.Exception.Message >> $errorLog
           "Item: " + $_.Exception.ItemName >> $errorLog
-          Invoke-Item $errorLog
+          if ([bool](get-process  notepad -ea 0)) {
+            Stop-Process notepad 
+            Invoke-Item $errorLog
+          }
           
           mv $newFile $waitFolder -Force
           $exitLoop = $true
