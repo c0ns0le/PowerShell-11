@@ -104,13 +104,21 @@ function GetSeriesId($showName) {
     if ($series_ws) {
       $showName = ($showName+"*").Replace(' ','*')
       # Get series id based on name.
+      $matches = @()
       foreach ($Series in $series_ws.Data.Series){
         $tempName = ($series.SeriesName).Replace("'","")
         if ($tempName -like $showName){
           # Set the global series id variable.
-          $seriesId = $series.seriesid
-          $seriesName = $series.SeriesName
-          break
+          [array]$matches += $series      
+        }
+      }
+      $releaseYear = Get-Date -Year 1970 -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0 -Millisecond 0
+      foreach ($match in $matches)
+      {
+        if ((Get-date $match.FirstAired) -gt $releaseYear) {
+          $releaseYear = Get-date $match.FirstAired
+          $seriesId = $match.seriesid
+          $seriesName = $match.SeriesName
         }
       }
     }
@@ -539,22 +547,10 @@ foreach ($dir in $directories) {
           $seriesName = (Get-Culture).TextInfo.ToTitleCase($seriesName.ToLower()).Trim().Replace('_',' ')
           Write-Host "Series Name (Title Case): $seriesName"
           # A few specific replace Strings for specific problem shows.
-          if ($seriesName -like 'Overhaulin*') {
-            $seriesName = 'overhaulin'
-          } elseif ($seriesName -like 'Ballers*') {
+          if ($seriesName -like 'Ballers*') {
             $seriesName = 'Ballers'
-          } elseif ($seriesName -like 'Scream*') {
-            $seriesName = 'Scream'
-          } elseif ($seriesName -like 'Aquarius*') {
-            $seriesName = 'Aquarius (2015)'
-          } elseif ($seriesName -like 'House Of Cards*') {
-            $seriesName = 'House Of Cards (US)'
-          } elseif ($seriesName -like 'The Americans*') {
-            $seriesName = 'The Americans (2013)'
           } elseif ($seriesName -like 'Louie*') {
             $seriesName = 'Louie (2010)'
-          } elseif ($seriesName -eq 'Daredevil') {
-            $seriesName = 'Marvels Daredevil'
           }
           $seriesName = $seriesName.Replace("S H I E L D","S.H.I.E.L.D.")
 
