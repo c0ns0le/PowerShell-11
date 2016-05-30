@@ -94,7 +94,7 @@ function UnRarFiles($torrentDirectory,$outputDir,$file) {
   }
 }
 
-function GetSeriesId($showName) {
+function GetSeriesId($showName, $oldId) {
 
   # Get the Series ID based off the series name provided.
   try {
@@ -115,7 +115,7 @@ function GetSeriesId($showName) {
       $releaseYear = Get-Date -Year 1970 -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0 -Millisecond 0
       foreach ($match in $matches)
       {
-        if ((Get-date $match.FirstAired) -gt $releaseYear) {
+        if (((Get-date $match.FirstAired) -gt $releaseYear) -and $match.seriesid -ne $oldId) {
           $releaseYear = Get-date $match.FirstAired
           $seriesId = $match.seriesid
           $seriesName = $match.SeriesName
@@ -557,7 +557,7 @@ foreach ($dir in $directories) {
           # Tag, rename & move file to correct folder location.
           Write-Host "Parent directory: $untagged"
           if($seriesName) {
-            $return = GetSeriesId $SeriesName
+            $return = GetSeriesId $SeriesName $null
             $seriesId = $return[0]
             #$seriesName = $return[1].Replace(": The Series","")
             Write-Host "Series ID: $seriesId"
@@ -568,8 +568,8 @@ foreach ($dir in $directories) {
                 [xml]$baseseries_ws = $wc.DownloadString("$url")
                 if ($baseseries_ws) {
                   $baseSeriesData = $baseseries_ws.Data.Series
-                  $seriesName = $baseSeriesData.SeriesName
-                  Write-Host "Series Name (Corrected): $seriesName"
+                  #$seriesName = $baseSeriesData.SeriesName
+                  #Write-Host "Series Name (Corrected): $seriesName"
                   $actors = $baseSeriesData.Actors
                   Write-Host "Actors: $actors"
                   $contentRating = $baseSeriesData.ContentRating
@@ -606,8 +606,17 @@ foreach ($dir in $directories) {
               } 
               try {
                 Write-Host "Downloading episode data from theTVDb.com"
-                $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episodeId+"/en.xml"
-                [xml]$episode_ws = $wc.DownloadString("$url")
+                $continue = $false
+                while (!$continue) {                
+                  $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episodeId+"/en.xml"
+                  try {
+                    [xml]$episode_ws = $wc.DownloadString("$url")
+                    $continue = $true
+                  } catch {
+                    $return = GetSeriesId $SeriesName $match.$seriesId
+                    $seriesId = $return[0]
+                  }
+                }
                 if ($episode_ws) {
                   $episodeData = $episode_ws.Data.Episode
                   $episodeName = $episodeData.EpisodeName
@@ -652,9 +661,9 @@ foreach ($dir in $directories) {
             $destination = $destDrive+'TV Shows\'+$seriesName+"\Season "+$season+"\"
             
             # Clean unprintable characters and set fileformat.
-            $episodeName = $episodeName.Replace(':','_').Replace('?','').Replace('/','-').Replace('\','-').Replace(',','-').Trim()
+            $episodeName = $episodeName -replace '[/</>/:/"//\\/|/?/*\u0000-\u0008\u000B\u000C\u000E-\u001F\u0080-\u009F]', "_"
             if ($episode2Name) { 
-              $episode2Name = $episode2Name.Replace(':','_').Replace('?','').Replace('/','-').Replace('\','-').Replace(',','-').Trim()
+              $episode2Name = $episode2Name-replace '[/</>/:/"//\\/|/?/*\u0000-\u0008\u000B\u000C\u000E-\u001F\u0080-\u009F]', "_"
             }
             if ($episode2Id) {      
               $fileFormat = $seriesName+" - S"+$season+"E"+$episode+"-E"+$episode2+" - "+$episodeName+" & "+$episode2Name+".mp4"    
