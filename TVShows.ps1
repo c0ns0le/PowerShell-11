@@ -1,10 +1,10 @@
-﻿################################################################################
+################################################################################
 #                                                                              #
 # This script gets passed some arguments from uTorrent, which it uses to       #
 # rename, tag then move to the Media drive and add to Plex.                    #
 #                                                                              #
 # Created Date: 26 SEP 2013                                                    #
-# Version: 3.2                                                                 #
+# Version: 4.0                                                                 #
 #                                                                              #
 ################################################################################
 
@@ -94,45 +94,148 @@ function UnRarFiles($torrentDirectory,$outputDir,$file) {
   }
 }
 
-function GetSeriesId($showName, $oldId) {
-
-  # Get the Series ID based off the series name provided.
-  try {
-    Write-Host "Getting series id from theTVDb.com using series name for $showName."
-    $url=$tvdburl+"api/GetSeries.php?seriesname="+$showName+"&language=English"
-    [xml]$series_ws = $wc.DownloadString("$url")
-    if ($series_ws) {
+function GetSeriesData($showName, [int]$season, [int]$episode, [int]$episode2) {
+  if ($showName -and $season -and $episode) {
+    $continue = $false
+    # Get the Series data based off the series name provided.
+    try {
+      $lastSeriesId = 0    
+      Write-Host "Getting series id from theTVDb.com using series name for $showName."
+      $url=$tvdburl+"api/GetSeries.php?seriesname="+$showName+"&language=English"
+      try {
+        [xml]$series_ws = $wc.DownloadString("$url")
+      } catch [System.Net.WebException] {
+        $statusCode = [int]$_.Exception.Response.StatusCode
+        $html = $_.Exception.Response.StatusDescription
+        "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+        "Error: " + $statuscode + " : " + $html >> $errorLog
+      }
       $showName = ($showName+"*").Replace(' ','*')
       # Get series id based on name.
       $matches = @()
-      foreach ($Series in $series_ws.Data.Series){
+      foreach ($Series in $series_ws.Data.Series) {
         $tempName = ($series.SeriesName).Replace("'","")
         if ($tempName -like $showName){
           # Set the global series id variable.
           [array]$matches += $series      
         }
       }
-      $releaseYear = Get-Date -Year 1970 -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0 -Millisecond 0
-      foreach ($match in $matches)
-      {
-        if (((Get-date $match.FirstAired) -gt $releaseYear) -and $match.seriesid -ne $oldId) {
-          $releaseYear = Get-date $match.FirstAired
-          $seriesId = $match.seriesid
-          $seriesName = $match.SeriesName
-        }
+      if ($series_ws.Data.HasChildNodes -eq $true) {   
+        while (!$continue) {       
+          $showData = @{}
+          $releaseYear = Get-Date -Year 1970 -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0 -Millisecond 0
+          foreach ($match in $matches) {
+            if (((Get-date $match.FirstAired) -gt $releaseYear) -and $match.seriesid -ne $lastSeriesId) {
+              $releaseYear = Get-date $match.FirstAired 
+              $seriesId = $match.seriesid
+            }
+          }
+          # Get the base series record.
+          $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/en.xml"
+          try {
+            [xml]$baseseries_ws = $wc.DownloadString("$url")
+          } catch [System.Net.WebException] {
+            $statusCode = [int]$_.Exception.Response.StatusCode
+            $html = $_.Exception.Response.StatusDescription
+            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+            "Error\: $statuscode\:$html" >> $errorLog          
+          }        
+          if ($baseseries_ws.Data.HasChildNodes -eq $true) {
+            $baseSeriesData = $baseseries_ws.Data.Series
+            $showData.Add("SeriesId", $baseSeriesData.id)
+            Write-Host "Series ID: "$baseSeriesData.id
+            $showData.Add("SeriesName", $baseSeriesData.SeriesName)
+            Write-Host "Show: "$baseSeriesData.SeriesName
+            $showData.Add("Actors",$baseSeriesData.Actors)
+            Write-Host "Actors: "$baseSeriesData.Actors
+            $showData.Add("ContentRating",$baseSeriesData.ContentRating)
+            Write-Host "Rating: "$baseSeriesData.ContentRating
+            $genre = $baseSeriesData.Genre
+            $showData.Add("Genre", $baseSeriesData.Genre)
+            Write-Host "Genre: "$baseSeriesData.Genre
+            $showData.Add("Network", $baseSeriesData.Network)
+            Write-Host "Network: "$baseSeriesData.Network
+            # Download episode data.
+            Write-Host "`nDownloading episode data from theTVDb.com"
+            $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$season+"/"+$episode+"/en.xml"
+            try {
+              [xml]$episode_ws = $wc.DownloadString("$url")
+              if ($episode_ws.Data.HasChildNodes -eq $true){
+                $episodeData = $episode_ws.Data.Episode
+                $episodeName = $episodeData.EpisodeName -replace '[/</>/:/"//\\/|/?/*]', "_"
+                $showData.Add("EpisodeName", $episodeName)
+                Write-Host "Episode name: "$episodeData.EpisodeName
+                $showData.Add("Synopsis", $episodeData.Overview)
+                Write-Host "Episode description: "$episodeData.Overview
+                $showData.Add("AirDate", $episodeData.FirstAired)
+                Write-Host "Air date: "$episodeData.FirstAired
+                $continue = $true
+                if ($episode2) {
+                  Write-Host "Downloading episode 2 data from theTVDb.com"
+                  $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$season+"/"+$episode2+"/en.xml"
+                  try {
+                    [xml]$episode2_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
+                  } catch [System.Net.WebException] {
+                    $statusCode = [int]$_.Exception.Response.StatusCode
+                    # Ignore 404 error.  We want to retry in this instance.
+                    if ($statusCode -ne 404) {
+                      $html = $_.Exception.Response.StatusDescription
+                      "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                      "Error\: $statuscode\:$html" >> $errorLog
+                    }
+                  }
+                  if ($episode2_ws.Data.HasChildNodes -eq $true) {
+                    $episode2Data = $episode2_ws.Data.Episode
+                    $episode2Name = $episode2Data.EpisodeName -replace '[/</>/:/"//\\/|/?/*]', "_"
+                    $showData.Add("Episode2Name",$episode2Name)
+                    Write-Host "Episode 2 name: $episode2Name"
+                    $episode1Synopsis = $showData.get_Item("Synopsis")
+                    $synopsis = $episode1Synopsis+' & '+$episode2Data.Overview
+                    $showData.set_Item("Synopsis", $synopsis)
+                    Write-Host "Combined synopsis: $synopsis"
+                  } else {
+                    "No data found for Episode: " + $episode2.ToString() + " of season " + $season.ToString() + " for " + $showName + " on the TVBD. Exiting." >> $errorLog                  
+                  }                  
+                }
+              } else {
+                "No data found for Episode: " + $episode.ToString() + " of season " + $season.ToString() + " for " + $showName + " on the TVBD. Exiting." >> $errorLog
+                return $false
+              }
+            } catch [System.Net.WebException] {
+              $lastSeriesId = $seriesId
+              Write-Host "Incorrect series with ID: "$lastSeriesId". Retrying."
+              $statusCode = [int]$_.Exception.Response.StatusCode
+              # Ignore 404 error.  We want to retry in this instance.
+              if ($statusCode -ne 404) {
+                $html = $_.Exception.Response.StatusDescription
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Error\: $statuscode\:$html" >> $errorLog
+              }
+            }
+          } else {          
+            "No data found for Series with Series ID: " + $seriesId + " on the TVBD. Exiting." >> $errorLog
+            return $false
+          }    
+        } 
+        return $showData
+      } else {
+        "No Show called " + $ShowName + " found on The TVDB. Exiting." >> $errorLog
+        return $false
+      }  
+    } catch {
+      "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+      "Exception: " + $_.Exception.Message >> $errorLog
+      "Item: " + $showName >> $errorLog
+      if ([bool](get-process  notepad -ea 0)) {
+        Stop-Process notepad 
+        Invoke-Item $errorLog
       }
-    }
-  } catch {
-    "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-    "Exception: " + $_.Exception.Message >> $errorLog
-    "Item: " + $showName >> $errorLog
-    if ([bool](get-process  notepad -ea 0)) {
-      Stop-Process notepad 
-      Invoke-Item $errorLog
-    }
-    return $false
+      return $false
+    }  
+  } else {
+    "Not enough information provided to complete search.  `nNeed show name, season and episode number. Exiting." >> $errorLog
+    return $false  
   }
-  return $seriesId,$seriesName
 }
 
 function GetBannerImage($seriesId, $parentDir, $season) {
@@ -557,87 +660,35 @@ foreach ($dir in $directories) {
           # Tag, rename & move file to correct folder location.
           Write-Host "Parent directory: $untagged"
           if($seriesName) {
-            $return = GetSeriesId $SeriesName $null
-            $seriesId = $return[0]
-            #$seriesName = $return[1].Replace(": The Series","")
-            Write-Host "Series ID: $seriesId"
-            if ($seriesId) {
-              try {
-                # Get the base series record.
-                $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/en.xml"
-                [xml]$baseseries_ws = $wc.DownloadString("$url")
-                if ($baseseries_ws) {
-                  $baseSeriesData = $baseseries_ws.Data.Series
-                  #$seriesName = $baseSeriesData.SeriesName
-                  #Write-Host "Series Name (Corrected): $seriesName"
-                  $actors = $baseSeriesData.Actors
-                  Write-Host "Actors: $actors"
-                  $contentRating = $baseSeriesData.ContentRating
-                  Write-Host "Rating: $contentRating"
-                  $genre = $baseSeriesData.Genre
-                  Write-Host "Genre: $genre"
-                  $network = $baseSeriesData.Network
-                  Write-Host "Network: $network"
-                }
-              } catch {
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-                "Exception: " + $_.Exception.Message >> $errorLog
-                "Item: " + $file.FullName >> $errorLog
-                if ([bool](get-process  notepad -ea 0)) {
-                  Stop-Process notepad 
-                  Invoke-Item $errorLog
-                }
-              }
-            } else {
+            $data = GetSeriesData $SeriesName $season $episode $episode2
+            if (!$showDetails) {
               Write-Host "Unable to connect to thetvdb.com, aborting tag."
               $waitFolder = $env:USERPROFILE+"\Downloads\Torrents\Untagged\"
               Write-Host "Moving $file.name to $waitFolder."
               Move-Item -LiteralPath $file $waitFolder -Force -Verbose
+              Invoke-Item $errorLog
               break
-            } 
-          } 
-          
-          if($seriesId) {
-            if ($season -and $episode) {
-              [int]$seasonId = $season
-              $episodeId = [int]$episode
+            } else {
+              # Add leading zeros to season and episode numbers.
+              $season = $season.PadLeft(2,"0")            
+              $episode = $episode.PadLeft(2,"0")
               if ($episode2) {
-                $episode2Id = [int]$episode2
-              } 
+                $episode2 = $episode2.PadLeft(2,"0")
+              }              
+              # Set destination folder based on the show name and season.
+              Write-Host "Setting destination directory based on series name, season and episode numbers."
+              $destination = $destDrive+'TV Shows\'+$seriesName+"\Season "+$season+"\"
+              if ($episode2Id) {      
+                $fileFormat = $seriesName+" - S"+$season+"E"+$episode+"-E"+$episode2+" - "+$episodeName+" & "+$episode2Name+".mp4"    
+              } else {
+                $fileFormat = $seriesName+" - S"+$season+"E"+$episode+" - "+$episodeName+".mp4"
+              }
+              Write-Host "Formatted file name: $fileFormat"
+              
               try {
-                Write-Host "Downloading episode data from theTVDb.com"
-                $continue = $false
-                while (!$continue) {                
-                  $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episodeId+"/en.xml"
-                  try {
-                    [xml]$episode_ws = $wc.DownloadString("$url")
-                    $continue = $true
-                  } catch {
-                    $return = GetSeriesId $SeriesName $match.$seriesId
-                    $seriesId = $return[0]
-                  }
-                }
-                if ($episode_ws) {
-                  $episodeData = $episode_ws.Data.Episode
-                  $episodeName = $episodeData.EpisodeName
-                  Write-Host "Episode name: $episodeName"
-                  $description = $episodeData.Overview
-                  Write-Host "Episode description: $description"
-                  $airDate = $episodeData.FirstAired
-                  Write-Host "Air date: $airDate"
-                } 
-                if ($episode2Id) {
-                  Write-Host "Downloading episode 2 data from theTVDb.com"
-                  $url=$tvdburl+"api/"+$tvdbAPIKey+"/series/"+$seriesId+"/default/"+$seasonId+"/"+$episode2Id+"/en.xml"
-                  [xml]$episode2_ws = [System.Web.HttpUtility]::HtmlDecode($wc.DownloadString("$url"))
-                  if ($episode2_ws) {
-                    $episode2Data = $episode2_ws.Data.Episode
-                    $episode2Name = $episode2Data.EpisodeName
-                    Write-Host "Episode 2 name: $episode2Name"
-                    $description = $description+' '+$episode2Data.Overview
-                    Write-Host "Combined description: $description"
-                  } 
-                } 
+                # Rename the file
+                Write-Host "Renaming $file to $fileFormat"
+                Rename-Item -Path $newFile $fileFormat -Force -Verbose
               } catch {
                 "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
                 "Exception: " + $_.Exception.Message >> $errorLog
@@ -647,207 +698,171 @@ foreach ($dir in $directories) {
                   Invoke-Item $errorLog
                 }
               }
-            }
-            
-            # Add leading zeros to season and episode numbers.
-            $season = $season.PadLeft(2,"0")            
-            $episode = $episode.PadLeft(2,"0")
-            if ($episode2) {
-              $episode2 = $episode2.PadLeft(2,"0")
-            }
-            
-            # Set destination folder based on the show name and season.
-            Write-Host "Setting destination directory based on series name, season and episode numbers."
-            $destination = $destDrive+'TV Shows\'+$seriesName+"\Season "+$season+"\"
-            
-            # Clean unprintable characters and set fileformat.
-            $episodeName = $episodeName -replace '[/</>/:/"//\\/|/?/*\u0000-\u0008\u000B\u000C\u000E-\u001F\u0080-\u009F]', "_"
-            if ($episode2Name) { 
-              $episode2Name = $episode2Name-replace '[/</>/:/"//\\/|/?/*\u0000-\u0008\u000B\u000C\u000E-\u001F\u0080-\u009F]', "_"
-            }
-            if ($episode2Id) {      
-              $fileFormat = $seriesName+" - S"+$season+"E"+$episode+"-E"+$episode2+" - "+$episodeName+" & "+$episode2Name+".mp4"    
-            } else {
-              $fileFormat = $seriesName+" - S"+$season+"E"+$episode+" - "+$episodeName+".mp4"
-            }
-            Write-Host "Formatted file name: $fileFormat"
-            try {
-              # Rename the file
-              Write-Host "Renaming $file to $fileFormat"
-              Rename-Item -Path $newFile $fileFormat -Force -Verbose
-            } catch {
-              "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-              "Exception: " + $_.Exception.Message >> $errorLog
-              "Item: " + $file.FullName >> $errorLog
-              if ([bool](get-process  notepad -ea 0)) {
-                Stop-Process notepad 
-                Invoke-Item $errorLog
+              # If not renamed, use original name format.
+              if (!($fileFormat)) {
+                $fileFormat = (Split-Path $newFile -Leaf -Resolve)
+                Write-Host "Formatted file name: $fileFormat"
               }
-            }
-          }
-          
-          # If not renamed, use original name format.
-          if (!($fileFormat)) {
-            $fileFormat = (Split-Path $newFile -Leaf -Resolve)
-            Write-Host "Formatted file name: $fileFormat"
-          }
-          Write-Host "Deleting existing metadata from $fileFormat."
-          $fullFilePath = $dir+$fileFormat
-          Write-Host "File path: $fullFilePath"
-          try {
-            $atomicParams = $fullFilePath,'--metaEnema','--overWrite'
-            & $atomicParsley $atomicParams
-          } catch {
-            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-            "Exception: " + $_.Exception.Message >> $errorLog
-            "Item: " + $file.FullName >> $errorLog
-            if ([bool](get-process  notepad -ea 0)) {
-              Stop-Process notepad 
-              Invoke-Item $errorLog
-            }
-          }
-          # If atomic parsley fails due to file errors, re-encode the file using Handbrake.
-          if (($LastExitCode -ne 0) -and ($LastExitCode -ne $null)) {
-            Write-Host "An error occurred attempting to wipe $fullFilePath of metatags.  Re-encoding file."
-            $newFile = 'C:\Users\Steve\Downloads\Torrents\Tagging\'+(Split-Path $fullFilePath -Leaf -Resolve).Replace('.ts','.mp4')
-            Write-Host "New file: $newFile"
-            if ($newFile -eq $fullFilePath) {
-              $newFile.Replace('.mp4','(2).mp4')
-            }
-            EncodeWithHB $fullFilePath $newFile
-            if (Test-Path $newFile) {
-              Remove-Item $fullFilePath -Force -Verbose
-              mv $newFile $fullFilePath -Force -Verbose
-            }
-            return
-          }
-          Start-Sleep -Seconds 5
-          
-          if ($seriesId -and $season) {
-            # If destination doesn't exist, create it.
-            if (!(Test-Path $destination)){
-              New-Item -ItemType directory -Path $destination -Verbose
-            }
-            Write-Host "Destination: $destination"
-            # Download the season image file.
-            $imgFile = $destination+'folder.jpg'
-            if (!(Test-Path $imgFile )) {
-              $image = GetBannerImage $seriesId $dir $season 
-              if (Test-Path $image) {
-                mv $image $imgFile
-                # Set folder.jpg to hidden.
-                $file = get-item $imgFile -Force
-                $file.Attributes = 'Hidden'
-              }              
-            } 
-          }
-          
-          # Set up variables for tagging.
-          $episodeDesc = [string]$episode+[string]$episode2+' - '+$episodeName
-          $title = $fileFormat.Replace('.mp4','')
-          $album = $seriesName+', Season '+[int]$season
-          if ($actors) {
-            $actors = $actors.Replace('|',', ').Trim(',',' ')
-          }
-          # Gather Parameters
-          $atomicParams = @($fullFilePath)
-          if ($genre) {
-            $genre = $genre.Replace('|',', ').Trim(',',' ')
-          } else { 
-            $genre = 'TV Show' 
-          }
-          $atomicParams += @('--genre',$genre,'--stik','TV Show')
-          if (!($actors)) { 
-            $actors = 'N/A' 
-          }
-          $atomicParams += @('--artist',$actors)
-          if ($airDate) {
-            $airDate += 'T12:00:00Z'
-          } elseif ($date) {
-            $airDate = $date+'T12:00:00Z'
-          } else {
-            $airDate = (Get-Date -Format s)+'Z'
-          }
-          $atomicParams += @('--year',$airDate)
-          if ($episodeDesc) {
-            $atomicParams += @('--TVEpisode',$episodeDesc)
-          }
-          if (!($episodeId)) {
-            $episodeId = [int]$episode
-          }
-          $atomicParams += @('--TVEpisodeNum',$episodeId,'--tracknum',$episodeId)
-          if(!($seasonId)) {
-            $seasonId = [int]$seasons
-          }
-          $atomicParams += @('--TVSeason',$seasonId)
-          if ($contentRating) {
-            $atomicParams += @('--contentRating',$contentRating)
-          }
-          if ($title) {
-            $atomicParams += @('--title',$title)
-          }
-          if ($seriesName) {
-            $atomicParams += @('--albumArtist',$seriesName,'--TVShowName',$seriesName)
-          }
-          if ($album) {
-            $atomicParams += @('--album',$album)
-          }
-          if ($network) {
-            $atomicParams += @('--TVNetwork',$network)
-          }
-          if ($description) {
-            $atomicParams += @('--description',$description,'--longdesc',$description)
-          }
-          if (Test-Path $imgFile) {
-            $atomicParams += @('--artwork',$imgFile)
-          }
-          $atomicParams += @('--overWrite')
+              Write-Host "Deleting existing metadata from $fileFormat."
+              $fullFilePath = $dir+$fileFormat
+              Write-Host "File path: $fullFilePath"
+              try {
+                $atomicParams = $fullFilePath,'--metaEnema','--overWrite'
+                & $atomicParsley $atomicParams
+              } catch {
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: " + $_.Exception.Message >> $errorLog
+                "Item: " + $file.FullName >> $errorLog
+                if ([bool](get-process  notepad -ea 0)) {
+                  Stop-Process notepad 
+                  Invoke-Item $errorLog
+                }
+              }
+              # If atomic parsley fails due to file errors, re-encode the file using Handbrake.
+              if (($LastExitCode -ne 0) -and ($LastExitCode -ne $null)) {
+                Write-Host "An error occurred attempting to wipe $fullFilePath of metatags.  Re-encoding file."
+                $newFile = 'C:\Users\Steve\Downloads\Torrents\Tagging\'+(Split-Path $fullFilePath -Leaf -Resolve).Replace('.ts','.mp4')
+                Write-Host "New file: $newFile"
+                if ($newFile -eq $fullFilePath) {
+                  $newFile.Replace('.mp4','(2).mp4')
+                }
+                EncodeWithHB $fullFilePath $newFile
+                if (Test-Path $newFile) {
+                  Remove-Item $fullFilePath -Force -Verbose
+                  mv $newFile $fullFilePath -Force -Verbose
+                }
+                return
+              }
+              Start-Sleep -Seconds 5
+              # If destination doesn't exist, create it.
+              if (!(Test-Path $destination)){
+                New-Item -ItemType directory -Path $destination -Verbose
+              }
+              Write-Host "Destination: $destination"
+              # Download the season image file.
+              $imgFile = $destination+'folder.jpg'
+              if (!(Test-Path $imgFile )) {
+                $seriesId = $data.get_Item("SeriesId")
+                $image = GetBannerImage $seriesId $dir $season 
+                if (Test-Path $image) {
+                  mv $image $imgFile
+                  # Set folder.jpg to hidden.
+                  $file = get-item $imgFile -Force
+                  $file.Attributes = 'Hidden'
+                }              
+              }
               
-          # Tag the file.
-          Write-Host "Writing tags to $fileFormat"
-          try {
-            & $atomicParsley $atomicParams
-          } catch {
-            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-            "Exception: " + $_.Exception.Message >> $errorLog
-            "Item: " + $file.FullName >> $errorLog
-            if ([bool](get-process  notepad -ea 0)) {
-              Stop-Process notepad 
-              Invoke-Item $errorLog
+              # Set up variables for tagging.
+              if ($data.get_Item("Episode2Name")) {
+                $episodeDesc = [string]$episode+[string]$episode2+' - '+$data.get_Item("EpisodeName")+" & "+$data.get_Item("Episode2Name")
+              } else {             
+                $episodeDesc = [string]$episode+' - '+$data.get_Item("EpisodeName")
+              }  
+              $title = $fileFormat.Replace('.mp4','')
+              $album = $seriesName+', Season '+[int]$season
+              
+              # Gather Parameters              
+              $atomicParams = @($fullFilePath)
+              if ($data.get_Item("Actors")) {
+                $actors = $data.get_Item("Actors").Replace('|',', ').Trim(',',' ')
+              }
+              if (!($actors)) { 
+                $actors = 'N/A' 
+              }
+              $atomicParams += @('--artist',$actors)
+              if ($data.get_Item("Genre")) {
+                $genre = $data.get_Item("Genre").Replace('|',', ').Trim(',',' ')
+              } else { 
+                $genre = 'TV Show' 
+              }
+              $atomicParams += @('--genre',$genre,'--stik','TV Show')
+              if ($data.get_Item("AirDate")) {
+              $airDate = $data.get_Item("AirDate")+'T12:00:00Z'
+              } else {
+                $airDate = (Get-Date -Format s)+'Z'
+              }
+              $atomicParams += @('--year',$airDate)
+              if ($episodeDesc) {
+                $atomicParams += @('--TVEpisode',$episodeDesc)
+              }
+              if (!($episodeId)) {
+                $episodeId = [int]$episode
+              }
+              $atomicParams += @('--TVEpisodeNum',$episodeId,'--tracknum',$episodeId)
+              if(!($seasonId)) {
+                $seasonId = [int]$seasons
+              }
+              $atomicParams += @('--TVSeason',$seasonId)
+              if ($data.get_Item("ContentRating")) {
+                $atomicParams += @('--contentRating',$data.get_Item("ContentRating"))
+              }
+              if ($title) {
+                $atomicParams += @('--title',$title)
+              }
+              if ($data.get_Item("SeriesName")) {
+                $atomicParams += @('--albumArtist',$data.get_Item("SeriesName"),'--TVShowName',$data.get_Item("SeriesName"))
+              }
+              if ($album) {
+                $atomicParams += @('--album',$album)
+              }
+              if ($data.get_Item("Network")) {
+                $atomicParams += @('--TVNetwork',$data.get_Item("Network"))
+              }
+              if ($data.get_Item("Synopsis")) {
+                $atomicParams += @('--description',$data.get_Item("Synopsis"),'--longdesc',$data.get_Item("Synopsis"))
+              }
+              if (Test-Path $imgFile) {
+                $atomicParams += @('--artwork',$imgFile)
+              }
+              $atomicParams += @('--overWrite')
+              
+              # Tag the file.
+              Write-Host "Writing tags to $fileFormat"
+              try {
+                & $atomicParsley $atomicParams
+              } catch {
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: " + $_.Exception.Message >> $errorLog
+                "Item: " + $file.FullName >> $errorLog
+                if ([bool](get-process  notepad -ea 0)) {
+                  Stop-Process notepad 
+                  Invoke-Item $errorLog
+                }
+              }
+              Start-Sleep -Seconds 5
+              
+              # Move the file to provided destination.
+              try {  
+                if (Test-Path $fileFormat) {
+                  Move-Item -Path $fileFormat -Destination $destination -Force -Verbose
+                }
+              } catch {
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: " + $_.Exception.Message >> $errorLog
+                "Item: " + $file.FullName >> $errorLog
+                if ([bool](get-process  notepad -ea 0)) {
+                  Stop-Process notepad 
+                  Invoke-Item $errorLog
+                }
+              }
+              $newMp4Path = $destination+$fileFormat
+              
+              # Normalize Audio
+              try {
+                $aacParams = '/k','/r',$newMp4Path
+                & $aacgain $aacParams
+              } catch {
+                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: " + $_.Exception.Message >> $errorLog
+                "Item: " + $file.FullName >> $errorLog
+                if ([bool](get-process  notepad -ea 0)) {
+                  Stop-Process notepad 
+                  Invoke-Item $errorLog
+                }
+              }          
+              $exitLoop = $true
             }
           }
-          Start-Sleep -Seconds 5
-         
-          # Move the file to provided destination.
-          try {  
-            if (Test-Path $fileFormat) {
-              Move-Item -Path $fileFormat -Destination $destination -Force -Verbose
-            }
-          } catch {
-            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-            "Exception: " + $_.Exception.Message >> $errorLog
-            "Item: " + $file.FullName >> $errorLog
-            if ([bool](get-process  notepad -ea 0)) {
-              Stop-Process notepad 
-              Invoke-Item $errorLog
-            }
-          }
-          $newMp4Path = $destination+$fileFormat
-          
-          # Normalize Audio
-          try {
-            $aacParams = '/k','/r',$newMp4Path
-            & $aacgain $aacParams
-          } catch {
-            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-            "Exception: " + $_.Exception.Message >> $errorLog
-            "Item: " + $file.FullName >> $errorLog
-            if ([bool](get-process  notepad -ea 0)) {
-              Stop-Process notepad 
-              Invoke-Item $errorLog
-            }
-          }          
-          $exitLoop = $true
         } catch  {
           "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
           "Exception: " + $_.Exception.Message >> $errorLog
