@@ -95,6 +95,8 @@ function UnRarFiles($torrentDirectory,$outputDir,$file) {
 }
 
 function GetSeriesData($showName, [int]$season, [int]$episode, [int]$episode2) {
+  $tvdbAPIKey = $env:TVDB_API_KEY
+  $tvdburl = "http://thetvdb.com/"
   if ($showName -and $season -and $episode) {
     $continue = $false
     # Get the Series data based off the series name provided.
@@ -334,8 +336,6 @@ $startBracket = $null
 $timeout = 30
 $tmdbApiKey = $env:TMDB_API_KEY
 $tmdburl = "http://www.themoviedb.org/"
-$tvdbAPIKey = $env:TVDB_API_KEY
-$tvdburl = "http://thetvdb.com/"
 $uTorrentHome = $env:USERPROFILE+"\Downloads\Torrents\"
 $completed = $uTorrentHome+'Completed\'
 $unpacked = $uTorrentHome+'Unpacked\'
@@ -347,8 +347,8 @@ $script:waitFolder = $uTorrentHome+"Untagged\"
 $uTorrentPW = $env:UTORRENT_PW
 $uTorrentUser = $env:UTORRENT_USER
 $uTorrentWebUI = 'http://localhost:8080/gui'
-$wc = New-Object System.Net.WebClient
-$wc.Encoding = [System.Text.Encoding]::UTF8
+$script:wc = New-Object System.Net.WebClient
+$script:wc.Encoding = [System.Text.Encoding]::UTF8
 
 if (([environment]::OSVersion.Version.Major -eq 6) -and ([environment]::OSVersion.Version.Minor -ge 2)) {
   $videoWidthVar = 301 
