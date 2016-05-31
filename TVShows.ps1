@@ -1,4 +1,4 @@
-################################################################################
+﻿################################################################################
 #                                                                              #
 # This script gets passed some arguments from uTorrent, which it uses to       #
 # rename, tag then move to the Media drive and add to Plex.                    #
@@ -27,9 +27,9 @@ function EncodeWithFFMPEG($inputStr,$outputStr) {
     Write-Host "Encoding $inputStr to $outputStr..."
     [Diagnostics.Process]::Start($ffmpeg, $params).WaitForExit()
   } catch {
-    "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-    "Exception: " + $_.Exception.Message >> $errorLog
-    "Item: " + $inputStr >> $errorLog
+    "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+    "Exception: "+$_.Exception.Message >> $errorLog
+    "Item: "+$inputStr >> $errorLog
     if ([bool](get-process  notepad -ea 0)) {
       Stop-Process notepad 
       Invoke-Item $errorLog
@@ -57,9 +57,9 @@ function EncodeWithHB($inputStr,$outputStr){
     Write-Host "Encoding $inputStr to $outputStr..."
     [Diagnostics.Process]::Start($handbrake, $params).WaitForExit()
   } catch {
-    "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-    "Exception: " + $_.Exception.Message >> $errorLog
-    "Item: " + $inputStr >> $errorLog
+    "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+    "Exception: "+$_.Exception.Message >> $errorLog
+    "Item: "+$inputStr >> $errorLog
     if ([bool](get-process  notepad -ea 0)) {
       Stop-Process notepad 
       Invoke-Item $errorLog
@@ -83,9 +83,9 @@ function UnRarFiles($torrentDirectory,$outputDir,$file) {
     Write-Host "Upacking $torrentDirectory to $outputDir"
     [Diagnostics.Process]::Start($unrar, $unRarParams).WaitForExit()
   } catch {
-    "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-    "Exception: " + $_.Exception.Message >> $errorLog
-    "Item: " + $file >> $errorLog
+    "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+    "Exception: "+$_.Exception.Message >> $errorLog
+    "Item: "+$file >> $errorLog
     if ([bool](get-process  notepad -ea 0)) {
       Stop-Process notepad 
       Invoke-Item $errorLog
@@ -109,8 +109,8 @@ function GetSeriesData($showName, [int]$season, [int]$episode, [int]$episode2) {
       } catch [System.Net.WebException] {
         $statusCode = [int]$_.Exception.Response.StatusCode
         $html = $_.Exception.Response.StatusDescription
-        "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-        "Error: " + $statuscode + " : " + $html >> $errorLog
+        "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+        "Error: "+$statuscode+" : "+$html >> $errorLog
       }
       $showName = ($showName+"*").Replace(' ','*')
       # Get series id based on name.
@@ -139,7 +139,7 @@ function GetSeriesData($showName, [int]$season, [int]$episode, [int]$episode2) {
           } catch [System.Net.WebException] {
             $statusCode = [int]$_.Exception.Response.StatusCode
             $html = $_.Exception.Response.StatusDescription
-            "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+            "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
             "Error\: $statuscode\:$html" >> $errorLog          
           }        
           if ($baseseries_ws.Data.HasChildNodes -eq $true) {
@@ -182,7 +182,7 @@ function GetSeriesData($showName, [int]$season, [int]$episode, [int]$episode2) {
                     # Ignore 404 error.  We want to retry in this instance.
                     if ($statusCode -ne 404) {
                       $html = $_.Exception.Response.StatusDescription
-                      "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                      "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
                       "Error\: $statuscode\:$html" >> $errorLog
                     }
                   }
@@ -196,11 +196,11 @@ function GetSeriesData($showName, [int]$season, [int]$episode, [int]$episode2) {
                     $showData.set_Item("Synopsis", $synopsis)
                     Write-Host "Combined synopsis: $synopsis"
                   } else {
-                    "No data found for Episode: " + $episode2.ToString() + " of season " + $season.ToString() + " for " + $showName + " on the TVBD. Exiting." >> $errorLog                  
+                    "No data found for Episode: "+$episode2.ToString()+" of season "+$season.ToString()+" for "+$showName+" on the TVBD. Exiting." >> $errorLog                  
                   }                  
                 }
               } else {
-                "No data found for Episode: " + $episode.ToString() + " of season " + $season.ToString() + " for " + $showName + " on the TVBD. Exiting." >> $errorLog
+                "No data found for Episode: "+$episode.ToString()+" of season "+$season.ToString()+" for "+$showName+" on the TVBD. Exiting." >> $errorLog
                 return $false
               }
             } catch [System.Net.WebException] {
@@ -210,24 +210,24 @@ function GetSeriesData($showName, [int]$season, [int]$episode, [int]$episode2) {
               # Ignore 404 error.  We want to retry in this instance.
               if ($statusCode -ne 404) {
                 $html = $_.Exception.Response.StatusDescription
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
                 "Error\: $statuscode\:$html" >> $errorLog
               }
             }
           } else {          
-            "No data found for Series with Series ID: " + $seriesId + " on the TVBD. Exiting." >> $errorLog
+            "No data found for Series with Series ID: "+$seriesId+" on the TVBD. Exiting." >> $errorLog
             return $false
           }    
         } 
         return $showData
       } else {
-        "No Show called " + $ShowName + " found on The TVDB. Exiting." >> $errorLog
+        "No Show called "+$ShowName+" found on The TVDB. Exiting." >> $errorLog
         return $false
       }  
     } catch {
-      "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-      "Exception: " + $_.Exception.Message >> $errorLog
-      "Item: " + $showName >> $errorLog
+      "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+      "Exception: "+$_.Exception.Message >> $errorLog
+      "Item: "+$showName >> $errorLog
       if ([bool](get-process  notepad -ea 0)) {
         Stop-Process notepad 
         Invoke-Item $errorLog
@@ -306,7 +306,7 @@ function DownloadFile($url, $targetFile = 'c:\temp\xml.xml') {
   while ($count -gt 0) {
     $targetStream.Write($buffer, 0, $count)
     $count = $responseStream.Read($buffer,0,$buffer.length)
-    $downloadedBytes = $downloadedBytes + $count
+    $downloadedBytes = $downloadedBytes+$count
     Write-Progress -activity "Downloading file '$($url.split('/') | Select -Last 1)'" -status "Downloaded ($([System.Math]::Floor($downloadedBytes/1024))K of $($totalLength)K): " -PercentComplete ((([System.Math]::Floor($downloadedBytes/1024)) / $totalLength)  * 100)    
   }
   Write-Progress -activity "Finished downloading file '$($url.split('/') | Select -Last 1)'"
@@ -454,9 +454,9 @@ foreach ($torrent in $torrents) {
               try {
                 & $ffmpeg $ffmpegParams
               } catch {
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-                "Exception: " + $_.Exception.Message >> $errorLog
-                "Item: " + $newMp4Path >> $errorLog
+                "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: "+$_.Exception.Message >> $errorLog
+                "Item: "+$newMp4Path >> $errorLog
                 if ([bool](get-process  notepad -ea 0)) {
                   Stop-Process notepad 
                   Invoke-Item $errorLog
@@ -487,9 +487,9 @@ foreach ($torrent in $torrents) {
               try {
                 & $ffmpeg $ffmpegParams
               } catch {
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-                "Exception: " + $_.Exception.Message >> $errorLog
-                "Item: " + $f.FullName >> $errorLog
+                "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: "+$_.Exception.Message >> $errorLog
+                "Item: "+$f.FullName >> $errorLog
                 if ([bool](get-process  notepad -ea 0)) {
                   Stop-Process notepad 
                   Invoke-Item $errorLog
@@ -661,7 +661,7 @@ foreach ($dir in $directories) {
           Write-Host "Parent directory: $untagged"
           if($seriesName) {
             $data = GetSeriesData $SeriesName $season $episode $episode2
-            if (!$showDetails) {
+            if (!$data) {
               Write-Host "Unable to connect to thetvdb.com, aborting tag."
               $waitFolder = $env:USERPROFILE+"\Downloads\Torrents\Untagged\"
               Write-Host "Moving $file.name to $waitFolder."
@@ -690,9 +690,9 @@ foreach ($dir in $directories) {
                 Write-Host "Renaming $file to $fileFormat"
                 Rename-Item -Path $newFile $fileFormat -Force -Verbose
               } catch {
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-                "Exception: " + $_.Exception.Message >> $errorLog
-                "Item: " + $file.FullName >> $errorLog
+                "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: "+$_.Exception.Message >> $errorLog
+                "Item: "+$file.FullName >> $errorLog
                 if ([bool](get-process  notepad -ea 0)) {
                   Stop-Process notepad 
                   Invoke-Item $errorLog
@@ -710,9 +710,9 @@ foreach ($dir in $directories) {
                 $atomicParams = $fullFilePath,'--metaEnema','--overWrite'
                 & $atomicParsley $atomicParams
               } catch {
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-                "Exception: " + $_.Exception.Message >> $errorLog
-                "Item: " + $file.FullName >> $errorLog
+                "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: "+$_.Exception.Message >> $errorLog
+                "Item: "+$file.FullName >> $errorLog
                 if ([bool](get-process  notepad -ea 0)) {
                   Stop-Process notepad 
                   Invoke-Item $errorLog
@@ -821,9 +821,9 @@ foreach ($dir in $directories) {
               try {
                 & $atomicParsley $atomicParams
               } catch {
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-                "Exception: " + $_.Exception.Message >> $errorLog
-                "Item: " + $file.FullName >> $errorLog
+                "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: "+$_.Exception.Message >> $errorLog
+                "Item: "+$file.FullName >> $errorLog
                 if ([bool](get-process  notepad -ea 0)) {
                   Stop-Process notepad 
                   Invoke-Item $errorLog
@@ -837,9 +837,9 @@ foreach ($dir in $directories) {
                   Move-Item -Path $fileFormat -Destination $destination -Force -Verbose
                 }
               } catch {
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-                "Exception: " + $_.Exception.Message >> $errorLog
-                "Item: " + $file.FullName >> $errorLog
+                "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: "+$_.Exception.Message >> $errorLog
+                "Item: "+$file.FullName >> $errorLog
                 if ([bool](get-process  notepad -ea 0)) {
                   Stop-Process notepad 
                   Invoke-Item $errorLog
@@ -852,9 +852,9 @@ foreach ($dir in $directories) {
                 $aacParams = '/k','/r',$newMp4Path
                 & $aacgain $aacParams
               } catch {
-                "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-                "Exception: " + $_.Exception.Message >> $errorLog
-                "Item: " + $file.FullName >> $errorLog
+                "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+                "Exception: "+$_.Exception.Message >> $errorLog
+                "Item: "+$file.FullName >> $errorLog
                 if ([bool](get-process  notepad -ea 0)) {
                   Stop-Process notepad 
                   Invoke-Item $errorLog
@@ -864,9 +864,9 @@ foreach ($dir in $directories) {
             }
           }
         } catch  {
-          "Line: " + $_.InvocationInfo.ScriptLineNumber >> $errorLog
-          "Exception: " + $_.Exception.Message >> $errorLog
-          "Item: " + $_.Exception.ItemName >> $errorLog
+          "Line: "+$_.InvocationInfo.ScriptLineNumber >> $errorLog
+          "Exception: "+$_.Exception.Message >> $errorLog
+          "Item: "+$_.Exception.ItemName >> $errorLog
           if ([bool](get-process  notepad -ea 0)) {
             Stop-Process notepad 
             Invoke-Item $errorLog

@@ -1,7 +1,7 @@
 ﻿$aacgain = 'D:\Dropbox\Applications\Open Source\Audio Apps\aacgain_1_9\aacgain.exe'
 
-sl 'D:\TV Shows'
-$shows = gci -Include '*.mp4' -Recurse
+sl 'D:\Music'
+$shows = gci -Include '*.m4a' -Recurse
 $showCount = $shows.Count
 $counter = 0;
 foreach ($show in $shows) {
